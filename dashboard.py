@@ -147,12 +147,17 @@ def sheets_load():
         sid = _get_sheet_id()
         if not gc or not sid:
             return None
-        sh    = gc.open_by_key(sid)
-        ws    = sh.worksheet("bench_data")
-        raw   = ws.acell("A1").value
+        sh = gc.open_by_key(sid)
+        # Create worksheet if it doesn't exist yet
+        try:
+            ws = sh.worksheet("bench_data")
+        except Exception:
+            ws = sh.add_worksheet("bench_data", rows=2, cols=1)
+            return {}   # new sheet — return empty, not None
+        raw = ws.acell("A1").value
         if raw:
             return json.loads(raw)
-        return {}
+        return {}   # sheet exists but empty — that's fine
     except Exception:
         return None
 
@@ -753,6 +758,17 @@ if st.session_state.data is None:
 
 data = st.session_state.data
 
+# ── Access control ────────────────────────────────────────────────────────────
+# Pages visible to everyone (public URL)
+PUBLIC_PAGES = ["Overview", "Dashboard"]
+# Pages that require the operator password
+PROTECTED_PAGES = ["Log session", "Log book", "Components",
+                   "Rig configuration", "Log events", "Settings"]
+OPERATOR_PASSWORD = "air2024"   # ← change this to your preferred password
+
+if "is_operator" not in st.session_state:
+    st.session_state.is_operator = False
+
 # ── Sidebar navigation ────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
@@ -766,25 +782,41 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     st.markdown("<hr style='margin:0 0 12px;border-color:#e0e0e0;'>", unsafe_allow_html=True)
 
-    NAV_PAGES = [
-        "Overview",
-        "Dashboard",
-        "Log session",
-        "Log book",
-        "Components",
-        "Rig configuration",
-        "Log events",
-        "Settings",
-    ]
+    # Show public pages always
+    NAV_PAGES = PUBLIC_PAGES.copy()
+    if st.session_state.is_operator:
+        NAV_PAGES += PROTECTED_PAGES
+
     if "nav_page" not in st.session_state:
         st.session_state.nav_page = "Overview"
+    # Reset to Overview if current page is no longer accessible
+    if st.session_state.nav_page not in NAV_PAGES:
+        st.session_state.nav_page = "Overview"
 
-    for page in NAV_PAGES:
-        is_active = st.session_state.nav_page == page
-        style = ("background:#111;color:#fff;" if is_active
-                 else "background:transparent;color:#333;")
-        if st.button(page, key=f"nav_{page}", use_container_width=True):
-            st.session_state.nav_page = page
+    for p in NAV_PAGES:
+        is_active = st.session_state.nav_page == p
+        if st.button(p, key=f"nav_{p}", use_container_width=True):
+            st.session_state.nav_page = p
+            st.rerun()
+
+    st.markdown("<hr style='margin:12px 0 8px;border-color:#e0e0e0;'>", unsafe_allow_html=True)
+
+    # Operator login / logout
+    if not st.session_state.is_operator:
+        with st.expander("Operator login"):
+            pwd = st.text_input("Password", type="password", key="sidebar_pwd")
+            if st.button("Login", key="sidebar_login"):
+                if pwd == OPERATOR_PASSWORD:
+                    st.session_state.is_operator = True
+                    st.rerun()
+                else:
+                    st.error("Incorrect password")
+    else:
+        st.markdown("<div style='font-size:11px;color:#888;padding:4px 12px;'>Operator mode</div>",
+                    unsafe_allow_html=True)
+        if st.button("Logout", key="sidebar_logout"):
+            st.session_state.is_operator = False
+            st.session_state.nav_page = "Overview"
             st.rerun()
 
 active_page = st.session_state.nav_page
@@ -1938,11 +1970,24 @@ if page("Settings"):
         c1, c2 = st.columns(2)
         if c1.button("Test connection", key="test_sheets_settings"):
             with st.spinner("Connecting…"):
-                result = sheets_load()
-            if result is not None:
+                try:
+                    gc_t  = _get_sheets_client()
+                    sid_t = _get_sheet_id()
+                    sh_t  = gc_t.open_by_key(sid_t)
+                    # Try to get or create the worksheet
+                    try:
+                        ws_t = sh_t.worksheet("bench_data")
+                    except Exception:
+                        ws_t = sh_t.add_worksheet("bench_data", rows=2, cols=1)
+                    test_ok  = True
+                    test_err = ""
+                except Exception as _te:
+                    test_ok  = False
+                    test_err = str(_te)
+            if test_ok:
                 st.success("Connected! Google Sheets is reachable and working.")
             else:
-                st.error("Could not read from Google Sheets.")
+                st.error(f"Connection failed: {test_err}")
         if c2.button("Pull latest from Sheets now", key="pull_sheets_settings"):
             with st.spinner("Pulling…"):
                 latest = sheets_load()
