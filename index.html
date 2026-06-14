@@ -1,0 +1,1926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIR — Test Bench</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<!-- No external chart library needed — using pure SVG charts -->
+<style>
+/* ── TOKENS ──────────────────────────────────────────────────────────────── */
+:root {
+  --bg:        #f5f5f3;
+  --surface:   #ffffff;
+  --border:    #e0e0dc;
+  --text:      #111111;
+  --text2:     #555555;
+  --text3:     #999999;
+  --accent:    #111111;
+  --inv:       #ffffff;
+  --ok:        #2a6e2a;
+  --warn:      #b06000;
+  --danger:    #a82020;
+  --info:      #1450a0;
+  --sidebar:   220px;
+  --top:       48px;
+  --r:         3px;
+}
+[data-theme=dark] {
+  --bg:      #0c0c0c;
+  --surface: #161616;
+  --border:  #282828;
+  --text:    #eeeeee;
+  --text2:   #aaaaaa;
+  --text3:   #555555;
+  --accent:  #eeeeee;
+  --inv:     #111111;
+}
+/* ── RESET ───────────────────────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  background:var(--bg);color:var(--text);font-size:13px;line-height:1.55;transition:background .2s,color .2s}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit}
+/* ── LAYOUT ──────────────────────────────────────────────────────────────── */
+#root{display:flex;min-height:100vh}
+.sidebar{
+  width:var(--sidebar);position:fixed;top:0;left:0;bottom:0;
+  background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;z-index:200}
+.main{margin-left:var(--sidebar);flex:1;display:flex;flex-direction:column;min-height:100vh}
+/* ── SIDEBAR ─────────────────────────────────────────────────────────────── */
+.sb-logo{padding:20px 18px 16px;border-bottom:1px solid var(--border)}
+.sb-logo .mark{font-size:28px;font-weight:700;letter-spacing:-.05em;color:var(--text);line-height:1}
+.sb-logo .sub{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--text3);margin-top:2px}
+.sb-nav{flex:1;padding:6px 0;overflow-y:auto}
+.sb-nav a{
+  display:block;padding:8px 18px;font-size:12px;color:var(--text2);
+  text-decoration:none;letter-spacing:.01em;transition:background .1s,color .1s;border:none;
+  background:none;width:100%;text-align:left}
+.sb-nav a:hover{background:var(--bg);color:var(--text)}
+.sb-nav a.active{background:var(--accent);color:var(--inv)}
+.sb-sep{height:1px;background:var(--border);margin:5px 18px}
+.sb-label{font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--text3);padding:8px 18px 3px}
+.sb-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.sb-tag{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3)}
+/* ── TOPBAR ──────────────────────────────────────────────────────────────── */
+.topbar{
+  height:var(--top);background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px;position:sticky;top:0;z-index:100}
+.topbar-title{font-size:14px;font-weight:500;letter-spacing:-.01em}
+.topbar-r{display:flex;align-items:center;gap:10px}
+.sync{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3)}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.sync-dot.busy{background:var(--warn);animation:blink 1s infinite}
+.sync-dot.err{background:var(--danger)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+/* ── PAGE ────────────────────────────────────────────────────────────────── */
+.page{padding:22px 24px;flex:1}
+/* ── BUTTONS ─────────────────────────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:7px 14px;border-radius:var(--r);font-size:12px;font-weight:500;
+  letter-spacing:.01em;border:1px solid transparent;transition:all .13s}
+.btn-p{background:var(--accent);color:var(--inv);border-color:var(--accent)}
+.btn-p:hover{opacity:.8}
+.btn-s{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-s:hover{border-color:var(--text)}
+.btn-d{background:transparent;color:var(--danger);border-color:#dbb}
+.btn-d:hover{background:#fdf5f5}
+[data-theme=dark] .btn-d:hover{background:#2a1515}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+/* ── CARDS ───────────────────────────────────────────────────────────────── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px}
+.card-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);margin-bottom:14px}
+/* ── KPI ─────────────────────────────────────────────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:11px;margin-bottom:18px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:15px}
+.kpi.alert{border-color:#d8aaaa}
+[data-theme=dark] .kpi.alert{border-color:#5a2020;background:#1a1010}
+.kpi-v{font-size:20px;font-weight:700;letter-spacing:-.025em;line-height:1.1}
+.kpi-l{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);margin-top:3px}
+.kpi-s{font-size:11px;color:var(--text2);margin-top:5px}
+/* ── CHARTS ──────────────────────────────────────────────────────────────── */
+.chart-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+.chart-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px}
+/* ── TABLE ───────────────────────────────────────────────────────────────── */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);
+  padding:8px 11px;border-bottom:1px solid var(--border);text-align:left;font-weight:600}
+.tbl td{padding:9px 11px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--bg)}
+/* ── FORM ────────────────────────────────────────────────────────────────── */
+.frow{display:grid;gap:11px}
+.fcols{display:grid;gap:10px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3)}
+.field input,.field select,.field textarea{
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--r);
+  padding:7px 9px;font-size:13px;color:var(--text);outline:none;transition:border .12s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--text)}
+.field textarea{resize:vertical;min-height:76px}
+/* ── BADGE ───────────────────────────────────────────────────────────────── */
+.badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:2px 6px;border-radius:2px}
+.b-ok{background:#e6f4e6;color:var(--ok)}
+.b-warn{background:#fdf0e0;color:var(--warn)}
+.b-crit{background:#fdeaea;color:var(--danger)}
+.b-info{background:#e8eefa;color:var(--info)}
+[data-theme=dark] .b-ok{background:#0d2010;color:#68bb68}
+[data-theme=dark] .b-warn{background:#2a1a00;color:#e09030}
+[data-theme=dark] .b-crit{background:#2a0d0d;color:#e08080}
+/* ── HEALTH BAR ──────────────────────────────────────────────────────────── */
+.hbar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin:5px 0}
+.hfill{height:100%;border-radius:2px;transition:width .3s}
+.hfill.ok{background:var(--ok)}.hfill.warn{background:var(--warn)}.hfill.crit{background:var(--danger)}
+/* ── EVENTS ──────────────────────────────────────────────────────────────── */
+.ev{padding:8px 11px;border-radius:var(--r);margin-bottom:6px;border-left:3px solid transparent;font-size:12px}
+.ev.info{background:#edf3fc;border-color:var(--info)}
+.ev.warning{background:#fef8ed;border-color:var(--warn)}
+.ev.critical{background:#fdecea;border-color:var(--danger)}
+[data-theme=dark] .ev.info{background:#0c1c30}
+[data-theme=dark] .ev.warning{background:#251a00}
+[data-theme=dark] .ev.critical{background:#280d0d}
+.ev-meta{font-size:10px;color:var(--text3);margin-bottom:2px}
+.ev-sev{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-right:5px}
+.ev-sev.info{color:var(--info)}.ev-sev.warning{color:var(--warn)}.ev-sev.critical{color:var(--danger)}
+/* ── RIG ─────────────────────────────────────────────────────────────────── */
+.rig-sides{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rig-st{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);margin-bottom:7px}
+.rig-row{font-size:12px;margin:3px 0;display:flex;align-items:center;gap:6px}
+.rig-row b{color:var(--text2);font-weight:500}
+.role-tag{font-size:9px;background:var(--border);color:var(--text2);padding:1px 5px;border-radius:2px;letter-spacing:.05em}
+.active-pill{font-size:10px;background:var(--accent);color:var(--inv);padding:2px 9px;border-radius:2px;font-weight:500;letter-spacing:.04em}
+/* ── TIMER ───────────────────────────────────────────────────────────────── */
+.timer-big{font-size:52px;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1;margin:18px 0;color:var(--text)}
+.timer-big.run{color:var(--ok)}.timer-big.pause{color:var(--warn)}
+/* ── MISC ────────────────────────────────────────────────────────────────── */
+.empty{padding:36px;text-align:center;color:var(--text3);font-size:12px}
+.divider{height:1px;background:var(--border);margin:14px 0}
+.section{margin-bottom:16px}
+.toast{
+  position:fixed;bottom:22px;right:22px;background:var(--accent);color:var(--inv);
+  padding:9px 16px;border-radius:var(--r);font-size:12px;z-index:1000;
+  box-shadow:0 4px 14px rgba(0,0,0,.18);animation:toastin .18s ease}
+@keyframes toastin{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+.spin{width:22px;height:22px;border:2px solid var(--border);border-top-color:var(--text);border-radius:50%;animation:spin .65s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading{display:flex;align-items:center;justify-content:center;min-height:200px}
+.settings-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:14px}
+.settings-block-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);
+  padding-bottom:10px;margin-bottom:14px;border-bottom:1px solid var(--border)}
+pre{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:11px;font-size:11px;overflow-x:auto;white-space:pre-wrap;line-height:1.6}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:var(--border)}
+@media(max-width:860px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .chart-grid-2,.chart-grid-3,.rig-sides{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  :root{--sidebar:0px}
+  .sidebar{transform:translateX(-220px);transition:transform .2s}
+  .sidebar.open{transform:translateX(0);width:220px;z-index:300;box-shadow:4px 0 20px rgba(0,0,0,.15)}
+  .main{margin-left:0}
+  .topbar{padding:0 12px}
+  .page{padding:16px 12px}
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .mob-menu{display:flex !important}
+}
+.mob-menu{display:none;align-items:center;justify-content:center;
+  width:32px;height:32px;background:none;border:none;cursor:pointer;
+  color:var(--text);font-size:20px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+// ── Pure SVG chart components — zero external dependencies ─────────────────
+
+// Donut chart
+function SvgDonut({ data, size=160 }) {
+  if (!data || data.length === 0) return <div className="empty" style={{padding:"20px 0"}}>No data</div>;
+  const COLORS = ["#111","#555","#888","#aaa","#ccc","#ddd"];
+  const total = data.reduce((a, d) => a + d.value, 0);
+  if (total === 0) return <div className="empty" style={{padding:"20px 0"}}>No data</div>;
+  const cx = size/2, cy = size/2, R = size*0.38, r = size*0.22;
+  let angle = -Math.PI/2;
+  const slices = data.map((d, i) => {
+    const sweep = (d.value / total) * 2 * Math.PI;
+    const x1 = cx + R * Math.cos(angle), y1 = cy + R * Math.sin(angle);
+    angle += sweep;
+    const x2 = cx + R * Math.cos(angle), y2 = cy + R * Math.sin(angle);
+    const large = sweep > Math.PI ? 1 : 0;
+    const ix1 = cx + r * Math.cos(angle - sweep), iy1 = cy + r * Math.sin(angle - sweep);
+    const ix2 = cx + r * Math.cos(angle), iy2 = cy + r * Math.sin(angle);
+    const path = `M${x1},${y1} A${R},${R} 0 ${large},1 ${x2},${y2} L${ix2},${iy2} A${r},${r} 0 ${large},0 ${ix1},${iy1} Z`;
+    return { path, color: COLORS[i % COLORS.length], label: d.name, value: d.value };
+  });
+  const [tip, setTip] = useState(null);
+  return (
+    <div>
+      <svg width={size} height={size} style={{display:"block",margin:"0 auto"}}>
+        {slices.map((s, i) => (
+          <path key={i} d={s.path} fill={s.color}
+            onMouseEnter={() => setTip(s)} onMouseLeave={() => setTip(null)}
+            style={{cursor:"default",transition:"opacity .15s"}}
+            opacity={tip && tip.label !== s.label ? 0.6 : 1}/>
+        ))}
+        {tip && (
+          <text x={cx} y={cy-8} textAnchor="middle" fontSize={10} fill="var(--text2)">{tip.label}</text>
+        )}
+        {tip && (
+          <text x={cx} y={cy+8} textAnchor="middle" fontSize={11} fontWeight="600" fill="var(--text)">{fmtDur(tip.value)}</text>
+        )}
+      </svg>
+      <div style={{display:"flex",flexWrap:"wrap",gap:"5px 10px",marginTop:6}}>
+        {slices.map((s, i) => (
+          <div key={i} style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"var(--text2)"}}>
+            <div style={{width:7,height:7,borderRadius:1,background:s.color,flexShrink:0}}/>
+            {s.label} <span style={{color:"var(--text3)"}}>{fmtDur(s.value)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Line chart
+function SvgLine({ data, width="100%", height=200 }) {
+  const ref = React.useRef(null);
+  const [w, setW] = useState(400);
+  useEffect(() => {
+    const obs = new ResizeObserver(e => setW(e[0].contentRect.width));
+    if (ref.current) obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+  const [tip, setTip] = useState(null);
+  if (!data || data.length === 0) return <div className="empty">No session data yet</div>;
+  const pad = { t:10, r:10, b:28, l:54 };
+  const W = w - pad.l - pad.r, H = height - pad.t - pad.b;
+  const maxH = Math.max(...data.map(d=>d.h), 0.001);
+  const xScale = i => (i / (data.length - 1 || 1)) * W;
+  const yScale = v => H - (v / maxH) * H;
+  const pts = data.map((d,i) => [xScale(i), yScale(d.h)]);
+  const path = pts.map((p,i) => `${i===0?"M":"L"}${p[0]},${p[1]}`).join(" ");
+  const area = `${path} L${pts[pts.length-1][0]},${H} L${pts[0][0]},${H} Z`;
+  // Y axis ticks
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => ({ v: maxH*f, y: yScale(maxH*f) }));
+  return (
+    <div ref={ref} style={{width}}>
+      <svg width={w} height={height}>
+        <g transform={`translate(${pad.l},${pad.t})`}>
+          {yTicks.map((t,i) => (
+            <g key={i}>
+              <line x1={0} y1={t.y} x2={W} y2={t.y} stroke="var(--border)" strokeWidth={1}/>
+              <text x={-6} y={t.y+4} textAnchor="end" fontSize={9} fill="var(--text3)">{fmtDur(t.v)}</text>
+            </g>
+          ))}
+          <path d={area} fill="var(--text)" opacity={0.05}/>
+          <path d={path} fill="none" stroke="var(--text)" strokeWidth={2} strokeLinejoin="round"/>
+          {pts.map((p,i) => (
+            <circle key={i} cx={p[0]} cy={p[1]} r={4} fill="var(--text)"
+              onMouseEnter={()=>setTip({x:p[0],y:p[1],d:data[i]})}
+              onMouseLeave={()=>setTip(null)} style={{cursor:"default"}}/>
+          ))}
+          {data.map((d,i) => (
+            <text key={i} x={xScale(i)} y={H+18} textAnchor="middle" fontSize={9} fill="var(--text3)">{d.m}</text>
+          ))}
+          {tip && (
+            <g>
+              <rect x={tip.x-40} y={tip.y-32} width={80} height={22} rx={3}
+                fill="var(--surface)" stroke="var(--border)" strokeWidth={1}/>
+              <text x={tip.x} y={tip.y-17} textAnchor="middle" fontSize={10} fill="var(--text)">{fmtDur(tip.d.h)}</text>
+            </g>
+          )}
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+// Horizontal bar chart
+function SvgHBar({ data, height=220 }) {
+  if (!data || data.length === 0) return <div className="empty">No session data yet</div>;
+  const maxV = Math.max(...data.map(d=>d[1]), 0.001);
+  const ROW = 28;
+  const totalH = data.length * ROW + 8;
+  return (
+    <div style={{width:"100%"}}>
+      {data.map(([label, val], i) => {
+        const pct = (val/maxV)*100;
+        const dur = fmtDur(val);
+        return (
+          <div key={i} style={{marginBottom:6}}>
+            <div style={{display:"flex",justifyContent:"space-between",
+              alignItems:"center",marginBottom:3}}>
+              <span style={{fontSize:11,color:"var(--text2)",maxWidth:"65%",
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
+                title={label}>{label}</span>
+              <span style={{fontSize:11,fontWeight:600,color:"var(--text)",
+                fontVariantNumeric:"tabular-nums",flexShrink:0,marginLeft:6}}>{dur}</span>
+            </div>
+            <div style={{height:6,background:"var(--border)",borderRadius:3,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${pct}%`,background:"var(--accent)",
+                borderRadius:3,transition:"width .3s"}}/>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════════
+const SHEET_ID   = "1btpyqWJaLl9YeelLbuvlJJilLBzCwWidSs_fGxQ-W8k";
+const OP_PASS    = "air2024";   // change this to your preferred password
+const PUB_PAGES  = ["Overview","Dashboard"];
+const PROT_PAGES = ["Live timer run","Log past session","Log book","Components",
+                    "Rig configuration","Log events","Settings"];
+const ALL_PAGES  = [...PUB_PAGES, ...PROT_PAGES];
+const TEST_TYPES = ["","Endurance","Thrust mapping","ATP","Vibration","Thermal","Acceptance","Other"];
+const OUTCOMES   = ["Success","Hardware Failure","User Abort","Inconclusive","Other"];
+const COLORS     = ["#111","#555","#888","#aaa","#ccc","#ddd"];
+
+// ═══════════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════════
+const fmtDur = h => {
+  const s = Math.round((h||0)*3600);
+  const hh=Math.floor(s/3600), mm=Math.floor((s%3600)/60), ss=s%60;
+  return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+};
+
+const brandOf = name => {
+  if (!name) return "—";
+  if (name.includes("_")) return name.split("_")[0];
+  const p = name.split(" ");
+  if (p.length>1 && /\d/.test(p[p.length-1])) return p.slice(0,-1).join(" ");
+  return name;
+};
+
+const compHours = (id, sessions) =>
+  sessions.reduce((a,s)=> a + ((s.components||[]).includes(id) ? (s.hours||0) : 0), 0);
+
+const compStatus = (h, limit) => {
+  if (!limit) return "ok";
+  const p = h/limit;
+  return p>=1 ? "crit" : p>=0.75 ? "warn" : "ok";
+};
+
+const mkId = pfx => `${pfx}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+
+const EMPTY = {
+  components:[], sessions:[], events:[],
+  brands:{}, rig_side_a:{}, rig_side_b:{},
+  active_side:"Side A", asana:{}, imported_files:[]
+};
+const ensureKeys = d => ({ ...EMPTY, ...d });
+
+// ═══════════════════════════════════════════════════════════════════
+// GOOGLE SHEETS  — two-layer: read via public CSV, write via Apps Script
+// ═══════════════════════════════════════════════════════════════════
+const LOCAL_KEY = "tbData_" + SHEET_ID.slice(0,8);
+
+const SheetsAPI = {
+  // ── Read ─────────────────────────────────────────────────────────
+  // Priority: 1) Apps Script proxy  2) gviz CSV  3) localStorage cache
+  async read(proxyUrl) {
+    // 1. Apps Script proxy (works from file:// AND web)
+    if (proxyUrl) {
+      try {
+        const url = `${proxyUrl}?sheetId=${SHEET_ID}&action=read`;
+        const res = await fetch(url, {cache:"no-store"});
+        if (res.ok) {
+          const txt = await res.text();
+          if (txt && txt !== "null" && txt !== "forbidden") {
+            const d = ensureKeys(JSON.parse(txt));
+            localStorage.setItem(LOCAL_KEY, JSON.stringify(d)); // cache it
+            return d;
+          }
+        }
+      } catch(e) { console.warn("Proxy read failed", e); }
+    }
+    // 2. gviz CSV (works from web servers, blocked from file://)
+    try {
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=bench_data&range=A1`;
+      const res = await fetch(url, {cache:"no-store"});
+      if (res.ok) {
+        const txt = await res.text();
+        const clean = txt.trim().replace(/^"|"$/g,"").replace(/""/g,'"');
+        if (clean && clean !== "null") {
+          const d = ensureKeys(JSON.parse(clean));
+          localStorage.setItem(LOCAL_KEY, JSON.stringify(d));
+          return d;
+        }
+        return ensureKeys({});
+      }
+    } catch(e) { console.warn("gviz read failed", e); }
+    // 3. localStorage cache (works offline / file://)
+    try {
+      const cached = localStorage.getItem(LOCAL_KEY);
+      if (cached) { console.info("Using cached data"); return ensureKeys(JSON.parse(cached)); }
+    } catch(e) {}
+    return null;
+  },
+
+  // ── Write ─────────────────────────────────────────────────────────
+  // Always saves to localStorage immediately (instant, no network needed).
+  // Then pushes to Google Sheets via proxy in background.
+  async write(data, proxyUrl, pin) {
+    // Always persist locally first — this is why the app never "loses" data
+    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(data)); } catch(e) {}
+
+    if (!proxyUrl) {
+      console.warn("No proxy URL set — data saved locally only");
+      return "local"; // not false — local save succeeded
+    }
+    try {
+      const res = await fetch(proxyUrl, {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ sheetId:SHEET_ID, data: JSON.stringify(data), pin })
+      });
+      const txt = await res.text();
+      if (txt === "forbidden") return "forbidden";
+      return res.ok;
+    } catch(e) {
+      console.warn("Proxy write failed — saved locally only", e);
+      return "local";
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// ROOT APP
+// ═══════════════════════════════════════════════════════════════════
+function App() {
+  const [theme,    setTheme]   = useState(() => localStorage.getItem("tbTheme")||"light");
+  const [page,     setPage]    = useState("Overview");
+  const [data,     setData]    = useState(null);
+  const [sync,     setSync]    = useState("busy");
+  const [toast,    setToast]   = useState(null);
+  const [isOp,     setIsOp]    = useState(() => sessionStorage.getItem("tbOp")==="1");
+  const [pwd,      setPwd]     = useState("");
+  const [cfg,      setCfg]     = useState(() => {
+    try { return JSON.parse(localStorage.getItem("tbCfg")||"{}"); } catch { return {}; }
+  });
+  const toastTimer  = useRef(null);
+
+  const saveCfg = c => { setCfg(c); localStorage.setItem("tbCfg", JSON.stringify(c)); };
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("tbTheme", theme);
+  }, [theme]);
+
+  const showToast = useCallback((msg, ms=3000) => {
+    setToast(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), ms);
+  }, []);
+
+  // ── Load ─────────────────────────────────────────────────────────
+  const load = useCallback(async () => {
+    // Manual refresh only — reads from Sheets and updates local data
+    const freshCfg = (() => {
+      try { return JSON.parse(localStorage.getItem("tbCfg")||"{}"); } catch { return {}; }
+    })();
+    if (!freshCfg.proxyUrl) { setSync("err"); showToast("No proxy URL set in Settings"); return; }
+    setSync("busy");
+    const d = await SheetsAPI.read(freshCfg.proxyUrl);
+    if (d) {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(d));
+      setData(d);
+      setSync("ok");
+      showToast("Refreshed from Google Sheets");
+    } else {
+      setSync("err");
+      showToast("Could not reach Google Sheets");
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    // ALWAYS start from localStorage — it's the source of truth
+    try {
+      const s = localStorage.getItem(LOCAL_KEY);
+      const localData = s ? ensureKeys(JSON.parse(s)) : ensureKeys({});
+      setData(localData);
+    } catch { setData(ensureKeys({})); }
+    // Show sync status — don't auto-load from Sheets on startup
+    // (prevents Sheets from overwriting local unsaved changes)
+    const cfg0 = (() => { try { return JSON.parse(localStorage.getItem("tbCfg")||"{}"); } catch { return {}; } })();
+    setSync(cfg0.proxyUrl ? "ok" : "err");
+  }, []);
+
+  // ── Save helper ───────────────────────────────────────────────────
+  const save = useCallback(async newData => {
+    // Step 1: write to localStorage FIRST (most important)
+    try {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(newData));
+    } catch(e) {
+      showToast("Save failed: " + e.message);
+      return false;
+    }
+    // Step 2: update React state
+    setData(newData);
+    // Step 3: push to Sheets if proxy configured
+    const freshCfg = (() => {
+      try { return JSON.parse(localStorage.getItem("tbCfg")||"{}"); } catch { return {}; }
+    })();
+    if (freshCfg.proxyUrl) {
+      setSync("busy");
+      try {
+        const result = await SheetsAPI.write(newData, freshCfg.proxyUrl, OP_PASS);
+        if (result === true) {
+          setSync("ok");
+        } else if (result === "forbidden") {
+          setSync("err");
+          showToast("Access denied — check PIN in Apps Script");
+        } else {
+          setSync("err");
+          // Data is safe in localStorage even if Sheets push failed
+        }
+      } catch(e) { setSync("err"); }
+    } else {
+      setSync("err");
+    }
+    return true;
+  }, [showToast]);
+
+
+  const pages = isOp ? ALL_PAGES : PUB_PAGES;
+  if (!pages.includes(page)) setPage("Overview");
+
+  // On every page change, refresh data from localStorage
+  // This ensures child components always get the latest saved data
+  const prevPage = useRef(page);
+  useEffect(() => {
+    if (prevPage.current !== page) {
+      prevPage.current = page;
+      try {
+        const s = localStorage.getItem(LOCAL_KEY);
+        if (s) {
+          const fresh = ensureKeys(JSON.parse(s));
+          setData(fresh);
+        }
+      } catch(e) {}
+    }
+  }, [page]);
+
+  // ── Login ─────────────────────────────────────────────────────────
+  const login = () => {
+    if (pwd === OP_PASS) {
+      setIsOp(true); sessionStorage.setItem("tbOp","1"); setPwd("");
+    } else showToast("Incorrect password");
+  };
+  const logout = () => {
+    setIsOp(false); sessionStorage.removeItem("tbOp"); setPage("Overview");
+  };
+
+  // App always renders — sync status shown in topbar, never blocks the UI
+  if (!data) return (
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",
+      justifyContent:"center",height:"100vh",gap:14}}>
+      <div className="spin"/>
+      <div style={{fontSize:11,color:"var(--text3)",letterSpacing:".12em",textTransform:"uppercase"}}>
+        Loading…
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* ── Sidebar ─────────────────────────────────────────────── */}
+      <div className="sidebar">
+        <div className="sb-logo">
+          <div className="mark">air</div>
+          <div className="sub">Motor Test Bench</div>
+        </div>
+        <nav className="sb-nav">
+          {/* Public pages — always visible */}
+          {PUB_PAGES.map(p =>
+            <a key={p} className={page===p?"active":""} onClick={()=>{
+              setPage(p);
+              document.querySelector(".sidebar")?.classList.remove("open");
+            }}>{p}</a>
+          )}
+          <div className="sb-sep"/>
+          {/* Protected pages — visible and clickable only when logged in */}
+          <div className="sb-label">{isOp ? "Operator" : "Operator access"}</div>
+          {PROT_PAGES.map(p => isOp
+            ? <a key={p} className={page===p?"active":""} onClick={()=>setPage(p)}>{p}</a>
+            : <div key={p} style={{padding:"7px 18px",fontSize:12,color:"var(--text3)",
+                display:"flex",alignItems:"center",gap:7,userSelect:"none"}}>
+                <span style={{fontSize:9,letterSpacing:".06em"}}>&#9632;</span>{p}
+              </div>
+          )}
+        </nav>
+        <div className="sb-foot">
+          {isOp
+            ? <>
+                <div className="sb-tag">Operator mode</div>
+                <button className="btn btn-s btn-sm" onClick={logout}>Logout</button>
+              </>
+            : <>
+                <div style={{marginBottom:6}}>
+                  <div className="field" style={{marginBottom:5}}>
+                    <label style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".1em",color:"var(--text3)"}}>Operator login</label>
+                    <input type="password" placeholder="Password" value={pwd}
+                      onChange={e=>setPwd(e.target.value)}
+                      onKeyDown={e=>e.key==="Enter"&&login()}
+                      style={{fontSize:12}}/>
+                  </div>
+                  <button className="btn btn-s btn-sm" style={{width:"100%"}} onClick={login}>Login</button>
+                </div>
+              </>}
+          <button className="btn btn-s btn-sm"
+            onClick={()=>setTheme(t=>t==="light"?"dark":"light")}>
+            {theme==="light"?"Dark mode":"Light mode"}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Main ────────────────────────────────────────────────── */}
+      <div className="main">
+        <div className="topbar">
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button className="mob-menu" onClick={()=>{
+              const sb=document.querySelector(".sidebar");
+              if(sb) sb.classList.toggle("open");
+            }} aria-label="Menu">&#9776;</button>
+            <div className="topbar-title">{page}</div>
+          </div>
+          <div className="topbar-r">
+            <button className="btn btn-s btn-sm" onClick={load}>Refresh</button>
+            <div className="sync">
+              <div className={`sync-dot ${sync==="busy"?"busy":sync==="err"?"err":""}`}/>
+              {sync==="busy" ? "Syncing"
+               : sync==="err" ? <span title="Open Settings and set the proxy URL to sync to Google Sheets">Local only</span>
+               : "Live — synced to Sheets"}
+            </div>
+          </div>
+        </div>
+        <div className="page">
+          {/* Public pages */}
+          {page==="Overview"  && <PageOverview  data={data}/>}
+          {page==="Dashboard" && <PageDashboard data={data}/>}
+          {/* Protected pages — show login prompt if not operator */}
+          {PROT_PAGES.includes(page) && (isOp
+            ? <>
+                {page==="Log past session"  && <PageLogPast      data={data} save={save} toast={showToast}/>}
+                {page==="Live timer run"    && <PageLiveTimer    data={data} save={save} toast={showToast}/>}
+                {page==="Log book"          && <PageLogBook      data={data} save={save} toast={showToast}/>}
+                {page==="Components"        && <PageComponents   data={data} save={save} toast={showToast}/>}
+                {page==="Rig configuration" && <PageRigConfig    data={data} save={save} toast={showToast}/>}
+                {page==="Log events"        && <PageLogEvents    data={data} save={save} toast={showToast}/>}
+                {page==="Settings"          && <PageSettings     data={data} save={save} toast={showToast}
+                                                 cfg={cfg} saveCfg={saveCfg} sync={sync} onRefresh={load}/>}
+              </>
+            : <LoginPrompt onLogin={(p)=>{
+                if(p===OP_PASS){setIsOp(true);sessionStorage.setItem("tbOp","1");}
+                else showToast("Incorrect password");
+              }}/>
+          )}
+        </div>
+      </div>
+
+      {toast && <div className="toast">{toast}</div>}
+    </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LOGIN PROMPT  — shown when a non-operator tries to access a protected page
+// ═══════════════════════════════════════════════════════════════════
+function LoginPrompt({ onLogin }) {
+  const [pwd, setPwd] = useState("");
+  const submit = () => { onLogin(pwd); setPwd(""); };
+  return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh"}}>
+      <div style={{background:"var(--surface)",border:"1px solid var(--border)",
+        borderRadius:"var(--r)",padding:"32px 28px",width:320,textAlign:"center"}}>
+        <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",
+          letterSpacing:".14em",color:"var(--text3)",marginBottom:20}}>
+          Operator access required
+        </div>
+        <div style={{fontSize:13,color:"var(--text2)",marginBottom:20,lineHeight:1.6}}>
+          This section is restricted to operators.<br/>Enter your password to continue.
+        </div>
+        <div className="field" style={{textAlign:"left",marginBottom:12}}>
+          <label>Password</label>
+          <input type="password" value={pwd} autoFocus
+            onChange={e=>setPwd(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&submit()}
+            placeholder="Enter operator password"/>
+        </div>
+        <button className="btn btn-p" style={{width:"100%"}} onClick={submit}>Login</button>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PAGE: OVERVIEW
+// ═══════════════════════════════════════════════════════════════════
+function PageOverview({ data }) {
+  const { sessions=[], components=[], events=[] } = data;
+  const now   = new Date();
+  const today = now.toISOString().slice(0,10);
+  const wkStart = (() => { const d=new Date(now); d.setDate(d.getDate()-d.getDay()); return d; })();
+
+  const todaySess = sessions.filter(s=>(s.timestamp||"").slice(0,10)===today);
+  const weekSess  = sessions.filter(s=>new Date(s.timestamp||0)>=wkStart);
+  const monSess   = sessions.filter(s=>(s.timestamp||"").slice(0,7)===now.toISOString().slice(0,7));
+  const allHrs    = sessions.reduce((a,s)=>a+(s.hours||0),0);
+  const alerts    = components.filter(c=>c.limit && compHours(c.id,sessions)>=c.limit*.75);
+
+  // Line chart — monthly totals
+  const monthMap = {};
+  sessions.forEach(s=>{
+    const m=(s.timestamp||"").slice(0,7);
+    if(m) monthMap[m]=(monthMap[m]||0)+(s.hours||0);
+  });
+  const lineData = Object.entries(monthMap).sort().map(([m,h])=>({
+    m: new Date(m+"-01").toLocaleDateString("en",{month:"short",year:"2-digit"}),
+    h, label:fmtDur(h)
+  }));
+
+  // Brand hours (no double-counting) — count session once per brand even if
+  // multiple components of that brand ran simultaneously
+  const compHoursMap = {};
+  sessions.forEach(s=>{
+    const brandsThisSession = new Set();
+    (s.components||[]).forEach(cid=>{
+      const c=components.find(x=>x.id===cid);
+      if(c) brandsThisSession.add(brandOf(c.name));
+    });
+    brandsThisSession.forEach(b=>{ compHoursMap[b]=(compHoursMap[b]||0)+(s.hours||0); });
+  });
+  const top5 = Object.entries(compHoursMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  return (
+    <div>
+      {/* KPIs */}
+      <div className="kpi-grid">
+        <div className={`kpi ${alerts.length?"alert":""}`}>
+          <div className="kpi-v">{fmtDur(todaySess.reduce((a,s)=>a+(s.hours||0),0))}</div>
+          <div className="kpi-l">Today</div>
+          {todaySess.length===0
+            ? <div className="kpi-s" style={{color:"var(--text3)"}}>No runs today</div>
+            : todaySess.map((s,i)=>(
+              <div key={i} className="kpi-s">{fmtDur(s.hours)} — {s.notes||"Manual run"}</div>
+            ))}
+        </div>
+        {[
+          ["This week",  weekSess.reduce((a,s)=>a+(s.hours||0),0), weekSess.length+" runs"],
+          ["This month", monSess.reduce((a,s)=>a+(s.hours||0),0),  monSess.length+" runs"],
+          ["Overall",    allHrs,  sessions.length+" total runs"],
+        ].map(([l,v,s])=>(
+          <div key={l} className="kpi">
+            <div className="kpi-v">{fmtDur(v)}</div>
+            <div className="kpi-l">{l}</div>
+            <div className="kpi-s">{s}</div>
+          </div>
+        ))}
+        <div className={`kpi ${alerts.length?"alert":""}`}>
+          <div className="kpi-v" style={{color:alerts.length?"var(--danger)":"var(--ok)"}}>
+            {alerts.length||"OK"}
+          </div>
+          <div className="kpi-l">Alerts</div>
+          <div className="kpi-s" style={{color:alerts.length?"var(--danger)":"var(--ok)"}}>
+            {alerts.length?alerts.map(c=>c.name).join(", "):"All clear"}
+          </div>
+        </div>
+      </div>
+
+      {/* Charts */}
+      <div className="chart-grid-2">
+        <div className="card">
+          <div className="card-title">Run time over time</div>
+          <SvgLine data={lineData} height={210}/>
+        </div>
+        <div className="card">
+          <div className="card-title">Hours by component</div>
+          {top5.length===0
+            ? <div className="empty">No data yet</div>
+            : <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <tbody>
+                  {top5.map(([name,h],i)=>(
+                    <tr key={i} style={{borderBottom:"0.5px solid var(--border)"}}>
+                      <td style={{padding:"7px 0",fontSize:12,color:"var(--text)",
+                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
+                        maxWidth:160}} title={name}>{name}</td>
+                      <td style={{padding:"7px 0",fontSize:12,fontWeight:600,
+                        fontVariantNumeric:"tabular-nums",color:"var(--text)",
+                        textAlign:"right",whiteSpace:"nowrap"}}>{fmtDur(h)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>}
+        </div>
+      </div>
+
+      {/* Rig + Events */}
+      <div className="chart-grid-2">
+        <div className="card">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div className="card-title" style={{marginBottom:0}}>Current rig configuration</div>
+            <span className="active-pill">{data.active_side||"Side A"} active</span>
+          </div>
+          <div className="rig-sides">
+            {["rig_side_a","rig_side_b"].map((key,i)=>{
+              const cfg=data[key]||{};
+              const rows=[
+                {l:"Motor",  v:cfg.Motor,   r:null},
+                {l:"ESC",    v:cfg.ESC,     r:cfg.ESC_role},
+                {l:"ESC",    v:cfg.ESC2,    r:cfg.ESC2_role},
+                {l:"Prop",   v:cfg.Prop,    r:null},
+                {l:"Prop",   v:cfg.Prop2,   r:null},
+                {l:"Battery",v:cfg.Battery, r:null},
+              ].filter(f=>f.v);
+              return (
+                <div key={key}>
+                  <div className="rig-st">Side {i===0?"A":"B"}</div>
+                  {rows.length===0
+                    ? <div style={{fontSize:11,color:"var(--text3)"}}>Not configured</div>
+                    : rows.map((f,j)=>(
+                      <div key={j} className="rig-row">
+                        <b>{f.l}:</b>{f.v}
+                        {f.r && <span className="role-tag">{f.r}</span>}
+                      </div>
+                    ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-title">Event log</div>
+          {events.length===0
+            ? <div className="empty">No events logged</div>
+            : [...events].sort((a,b)=>b.timestamp?.localeCompare(a.timestamp)).slice(0,6).map((ev,i)=>(
+              <div key={i} className={`ev ${ev.severity||"info"}`}>
+                <div className="ev-meta">
+                  <span className={`ev-sev ${ev.severity||"info"}`}>{ev.severity}</span>
+                  {(ev.timestamp||"").slice(0,16).replace("T"," ")}
+                </div>
+                {ev.text}
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PAGE: DASHBOARD
+// ═══════════════════════════════════════════════════════════════════
+function PageDashboard({ data }) {
+  const { sessions=[], components=[] } = data;
+
+  // ── CompTable: clean table showing name + hours, sorted by hours desc ──
+  const CompTable = ({ title, rows }) => (
+    <div>
+      <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",
+        letterSpacing:".1em",color:"var(--text3)",marginBottom:8}}>{title}</div>
+      {!rows||rows.length===0
+        ? <div style={{fontSize:12,color:"var(--text3)",padding:"8px 0"}}>No data</div>
+        : <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <tbody>
+              {rows.map((r,i)=>(
+                <tr key={i} style={{borderBottom:"0.5px solid var(--border)"}}>
+                  <td style={{padding:"7px 0",fontSize:12,color:"var(--text)",
+                    maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",
+                    whiteSpace:"nowrap"}} title={r.name}>{r.name}</td>
+                  <td style={{padding:"7px 0",fontSize:12,fontWeight:600,
+                    fontVariantNumeric:"tabular-nums",color:"var(--text)",
+                    textAlign:"right",whiteSpace:"nowrap"}}>{fmtDur(r.h)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>}
+    </div>
+  );
+
+  // ── StatList: breakdown with percentage (for outcomes/rig) ────────
+  const StatList = ({ title, rows }) => {
+    const total = (rows||[]).reduce((a,r)=>a+r.h,0);
+    return (
+      <div className="card">
+        <div className="card-title">{title}</div>
+        {!rows||rows.length===0
+          ? <div className="empty">No data</div>
+          : rows.map((r,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",
+              gap:10,marginBottom:7,fontSize:12}}>
+              <div style={{width:7,height:7,borderRadius:1,flexShrink:0,
+                background:["var(--text)","#555","#888","#aaa","#ccc"][i%5]}}/>
+              <span style={{flex:1,color:"var(--text2)",overflow:"hidden",
+                textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={r.name}>{r.name}</span>
+              <span style={{color:"var(--text3)",fontSize:11,minWidth:28,textAlign:"right"}}>
+                {total>0?Math.round((r.h/total)*100):0}%</span>
+              <span style={{fontVariantNumeric:"tabular-nums",fontWeight:600,
+                color:"var(--text)",minWidth:52,textAlign:"right"}}>{fmtDur(r.h)}</span>
+            </div>
+          ))}
+      </div>
+    );
+  };
+
+  // ── INDIVIDUAL component hours (each physical component) ─────────
+  // Rule: each component gets its own hours regardless of pairing.
+  // e.g. if ELMO1 + ELMO2 both run in a 1h session → each gets +1h.
+  const compRows = type => components
+    .filter(c=>c.type===type)
+    .map(c=>({ name:c.name, h:compHours(c.id,sessions) }))
+    .filter(r=>r.h>0)
+    .sort((a,b)=>b.h-a.h);
+
+  // ── BRAND aggregate hours (no double-counting) ────────────────────
+  // Rule: for each session, count its duration ONCE per brand,
+  // even if multiple components of that brand ran simultaneously.
+  const brandAggHrs = type => {
+    const m={};
+    sessions.forEach(s=>{
+      // Get unique brands used in this session for this component type
+      const brandsThisSession = new Set();
+      (s.components||[]).forEach(cid=>{
+        const c=components.find(x=>x.id===cid);
+        if(c&&c.type===type) brandsThisSession.add(brandOf(c.name));
+      });
+      // Add session hours once per brand (not once per component)
+      brandsThisSession.forEach(b=>{ m[b]=(m[b]||0)+(s.hours||0); });
+    });
+    return Object.entries(m).map(([name,h])=>({name,h})).sort((a,b)=>b.h-a.h);
+  };
+
+  // ── RIG utilisation (no double-counting) ─────────────────────────
+  // Rule: count each session once per side, not per component.
+  const rigMap={};
+  sessions.forEach(s=>{
+    const sd=s.side||"";
+    if(sd==="Side A"||sd==="Both") rigMap["Side A"]=(rigMap["Side A"]||0)+(s.hours||0);
+    if(sd==="Side B"||sd==="Both") rigMap["Side B"]=(rigMap["Side B"]||0)+(s.hours||0);
+    if(!sd||sd==="manual")         rigMap["Unattributed"]=(rigMap["Unattributed"]||0)+(s.hours||0);
+  });
+  const rigRows=Object.entries(rigMap).filter(([,h])=>h>0)
+    .map(([name,h])=>({name,h})).sort((a,b)=>b.h-a.h);
+
+  // ── Outcomes & test types (session-based, no double-counting) ─────
+  const aggBySess = key => {
+    const m={};
+    sessions.forEach(s=>{ const k=s[key]||"Unspecified"; m[k]=(m[k]||0)+(s.hours||0); });
+    return Object.entries(m).map(([name,h])=>({name,h})).sort((a,b)=>b.h-a.h);
+  };
+
+  // ── Lifetime KPIs (individual component hours, correct for lifespan) ─
+  const lifetimeKpi = ["Motor","ESC","Prop"].map(t=>({
+    label:`All ${t}s`, h:components.filter(c=>c.type===t).reduce((a,c)=>a+compHours(c.id,sessions),0)
+  }));
+
+  return (
+    <div>
+      {/* Lifetime KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:11,marginBottom:18}}>
+        {lifetimeKpi.map(({label,h})=>(
+          <div key={label} className="kpi">
+            <div className="kpi-v">{fmtDur(h)}</div>
+            <div className="kpi-l">{label} — total hours</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Individual component hours — 4-column table layout */}
+      <div className="card" style={{marginBottom:18}}>
+        <div className="card-title" style={{marginBottom:16}}>Component hours — individual</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:24}}>
+          <CompTable title="Motors"  rows={compRows("Motor")}/>
+          <CompTable title="ESCs"    rows={compRows("ESC")}/>
+          <CompTable title="Props"   rows={compRows("Prop")}/>
+          <CompTable title="Batteries" rows={compRows("Battery")}/>
+        </div>
+      </div>
+
+      {/* Rig utilisation + outcomes + test types */}
+      <div className="chart-grid-3">
+        <StatList title="Rig utilisation"  rows={rigRows}/>
+        <StatList title="Run outcomes"     rows={aggBySess("outcome")}/>
+        <StatList title="Test types"       rows={aggBySess("test_type")}/>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PAGE: LOG SESSION
+// ═══════════════════════════════════════════════════════════════════
+// ── Shared hook: resolve components from rig side ────────────────────────────
+// manDropdowns = { motor, ctrl, prop, bat } — used when side==="Manual selection"
+function useSideCmps(side, manSel, data, manDropdowns) {
+  const { components=[] } = data;
+  return useMemo(()=>{
+    if (side==="Manual selection") {
+      if (manDropdowns) {
+        // Structured dropdown mode
+        const names = [manDropdowns.motor, manDropdowns.ctrl,
+                       manDropdowns.prop,  manDropdowns.bat].filter(Boolean);
+        return components.filter(c => names.includes(c.name));
+      }
+      return components.filter(c=>manSel.includes(c.id));
+    }
+    const flds=["Motor","ESC","ESC2","Prop","Prop2","Battery"];
+    const cfg = side==="Side A" ? (data.rig_side_a||{})
+              : side==="Side B" ? (data.rig_side_b||{})
+              : {...(data.rig_side_a||{}),...(data.rig_side_b||{})};
+    const names=flds.map(f=>cfg[f]).filter(Boolean).map(n=>n.toLowerCase());
+    return components.filter(c=>names.includes(c.name.toLowerCase()));
+  },[side,manSel,manDropdowns,components,data.rig_side_a,data.rig_side_b]);
+}
+
+// ── Side selector (shared UI) ─────────────────────────────────────────────────
+// "Manual selection" now uses structured dropdowns (Motor / Controller / Prop / Battery)
+// instead of an ungrouped button grid.
+function SideSelector({ side, setSide, manSel, setManSel, sideCmps, components,
+                        manMotor, setManMotor, manCtrl, setManCtrl,
+                        manProp, setManProp, manBat, setManBat }) {
+  const opts = type => ["", ...components.filter(c=>c.type===type).map(c=>c.name)];
+  return (
+    <div className="settings-block">
+      <div className="settings-block-title">Which setup is running?</div>
+      <div className="btn-row" style={{marginBottom:12}}>
+        {["Side A","Side B","Both","Manual selection"].map(s=>(
+          <button key={s} className={`btn btn-sm ${side===s?"btn-p":"btn-s"}`} onClick={()=>setSide(s)}>{s}</button>
+        ))}
+      </div>
+      {side==="Manual selection" ? (
+        <div>
+          <div className="fcols" style={{gridTemplateColumns:"1fr 1fr 1fr 1fr",marginBottom:8}}>
+            <div className="field"><label>Motor</label>
+              <select value={manMotor||""} onChange={e=>setManMotor(e.target.value)}>
+                {opts("Motor").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}
+              </select></div>
+            <div className="field"><label>Controller (ESC)</label>
+              <select value={manCtrl||""} onChange={e=>setManCtrl(e.target.value)}>
+                {opts("ESC").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}
+              </select></div>
+            <div className="field"><label>Propeller</label>
+              <select value={manProp||""} onChange={e=>setManProp(e.target.value)}>
+                {opts("Prop").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}
+              </select></div>
+            <div className="field"><label>Battery</label>
+              <select value={manBat||""} onChange={e=>setManBat(e.target.value)}>
+                {opts("Battery").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}
+              </select></div>
+          </div>
+          {sideCmps.length>0 && (
+            <div style={{fontSize:11,color:"var(--text3)"}}>
+              Will log to: {sideCmps.map(c=>c.name).join(", ")}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{fontSize:12,color:"var(--text2)"}}>
+          Components: {sideCmps.length>0
+            ? sideCmps.map(c=>c.name).join(", ")
+            : <span style={{color:"var(--text3)"}}>No components configured for this side in Rig configuration</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PAGE: LOG PAST SESSION
+// ═══════════════════════════════════════════════════════════════════
+function PageLogPast({ data, save, toast }) {
+  const { sessions=[], components=[] } = data;
+  const [hrs,     setHrs]    = useState(0);
+  const [mins,    setMins]   = useState(0);
+  const [date,    setDate]   = useState(new Date().toISOString().slice(0,10));
+  const [notes,   setNotes]  = useState("");
+  const [ttype,   setTtype]  = useState("");
+  const [outcome, setOutcome]= useState("Success");
+  const [sname,   setSname]  = useState("");
+
+  // Structured component selection — one dropdown per type
+  const [selMotor,   setSelMotor]   = useState("");
+  const [selCtrl,    setSelCtrl]    = useState("");   // Controller = ESC
+  const [selProp,    setSelProp]    = useState("");
+  const [selBattery, setSelBattery] = useState("");
+
+  // Build options per type — only components that exist in the data
+  const opts = type => ["", ...components.filter(c=>c.type===type).map(c=>c.name)];
+
+  // Resolve selected component IDs for saving
+  const selectedIds = useMemo(() => {
+    const names = [selMotor, selCtrl, selProp, selBattery].filter(Boolean);
+    return components.filter(c => names.includes(c.name)).map(c => c.id);
+  }, [selMotor, selCtrl, selProp, selBattery, components]);
+
+  const log = async () => {
+    const h = hrs + mins/60;
+    if (h <= 0) { toast("Duration must be greater than zero"); return; }
+    if (selectedIds.length === 0) { toast("Please select at least one component"); return; }
+    const s = {
+      id: mkId("s"),
+      timestamp: new Date(date).toISOString(),
+      hours: h, components: selectedIds,
+      side: "manual",
+      notes, test_type: ttype, outcome, file_name: sname.trim()
+    };
+    const ok = await save({...data, sessions:[...sessions,s]});
+    if (ok !== false) {
+      toast("Past session logged");
+      setNotes(""); setSname(""); setHrs(0); setMins(0);
+      setSelMotor(""); setSelCtrl(""); setSelProp(""); setSelBattery("");
+    }
+  };
+
+  return (
+    <div style={{maxWidth:760}}>
+      <p style={{fontSize:12,color:"var(--text2)",marginBottom:16,lineHeight:1.7}}>
+        Use this page to record a run that already happened — historical data, paper logs, or
+        sessions not captured in real time.
+      </p>
+
+      {/* Component selection */}
+      <div className="settings-block">
+        <div className="settings-block-title">Components used</div>
+        <div className="fcols" style={{gridTemplateColumns:"1fr 1fr 1fr 1fr",marginBottom:6}}>
+          <div className="field">
+            <label>Motor</label>
+            <select value={selMotor} onChange={e=>setSelMotor(e.target.value)}>
+              {opts("Motor").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>Controller (ESC)</label>
+            <select value={selCtrl} onChange={e=>setSelCtrl(e.target.value)}>
+              {opts("ESC").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>Propeller</label>
+            <select value={selProp} onChange={e=>setSelProp(e.target.value)}>
+              {opts("Prop").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>Battery</label>
+            <select value={selBattery} onChange={e=>setSelBattery(e.target.value)}>
+              {opts("Battery").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}
+            </select>
+          </div>
+        </div>
+        {selectedIds.length > 0 && (
+          <div style={{fontSize:11,color:"var(--text3)",marginTop:6}}>
+            Will log hours to: {components.filter(c=>selectedIds.includes(c.id)).map(c=>c.name).join(", ")}
+          </div>
+        )}
+      </div>
+
+      {/* Session details */}
+      <div className="settings-block">
+        <div className="settings-block-title">Session details</div>
+        <div className="fcols" style={{gridTemplateColumns:"1fr 1fr 1fr 2fr",marginBottom:12}}>
+          <div className="field"><label>Date</label>
+            <input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+          <div className="field"><label>Hours</label>
+            <input type="number" min="0" value={hrs} onChange={e=>setHrs(+e.target.value)}/></div>
+          <div className="field"><label>Minutes</label>
+            <input type="number" min="0" max="59" value={mins} onChange={e=>setMins(+e.target.value)}/></div>
+          <div className="field"><label>Notes</label>
+            <input value={notes} onChange={e=>setNotes(e.target.value)} placeholder="e.g. ATP run, no issues"/></div>
+        </div>
+        <div className="fcols" style={{gridTemplateColumns:"1fr 1fr 2fr",marginBottom:14}}>
+          <div className="field"><label>Test type</label>
+            <select value={ttype} onChange={e=>setTtype(e.target.value)}>
+              {TEST_TYPES.map(t=><option key={t} value={t}>{t||"— select —"}</option>)}</select></div>
+          <div className="field"><label>Outcome</label>
+            <select value={outcome} onChange={e=>setOutcome(e.target.value)}>
+              {OUTCOMES.map(o=><option key={o} value={o}>{o}</option>)}</select></div>
+          <div className="field"><label>Session name (optional)</label>
+            <input value={sname} onChange={e=>setSname(e.target.value)} placeholder="e.g. 2024-03-15_Nidec_T01"/></div>
+        </div>
+        <button className="btn btn-p" onClick={log}>Save past session</button>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PAGE: LIVE TIMER RUN
+// ═══════════════════════════════════════════════════════════════════
+function PageLiveTimer({ data, save, toast }) {
+  const { sessions=[], components=[] } = data;
+  const [side,    setSide]   = useState("Side A");
+  const [manSel,  setManSel] = useState([]);
+  const [running, setRunning]= useState(false);
+  const [paused,  setPaused] = useState(false);
+  const [secs,    setSecs]   = useState(0);
+  // Post-run review state
+  const [phase,   setPhase]  = useState("timer"); // "timer" | "review"
+  const [stoppedSecs, setStoppedSecs] = useState(0);
+  // Review fields
+  const [outcome, setOutcome]= useState("Success");
+  const [issues,  setIssues] = useState("");
+  const [ttype,   setTtype]  = useState("");
+  const [sname,   setSname]  = useState("");
+  const tick = useRef(null);
+  const [manMotor, setManMotor] = useState("");
+  const [manCtrl,  setManCtrl]  = useState("");
+  const [manProp,  setManProp]  = useState("");
+  const [manBat,   setManBat]   = useState("");
+
+  const sideCmps = useSideCmps(side, manSel, data,
+    side==="Manual selection" ? {motor:manMotor,ctrl:manCtrl,prop:manProp,bat:manBat} : null);
+
+  useEffect(()=>{
+    if(running&&!paused){ tick.current=setInterval(()=>setSecs(s=>s+1),1000); }
+    else clearInterval(tick.current);
+    return ()=>clearInterval(tick.current);
+  },[running,paused]);
+
+  const tStr = s => {
+    const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  };
+
+  const stopTimer = () => {
+    if (sideCmps.length === 0) { toast("No components selected or configured"); return; }
+    if (secs === 0) { toast("Timer has not started yet"); return; }
+    clearInterval(tick.current);
+    setRunning(false); setPaused(false);
+    setStoppedSecs(secs);
+    setPhase("review");
+  };
+
+  const saveRun = async () => {
+    const h = stoppedSecs / 3600;
+    const s = {
+      id: mkId("s"), timestamp: new Date().toISOString(),
+      hours: h, components: sideCmps.map(c=>c.id),
+      side: side==="Manual selection"?"manual":side,
+      notes: issues.trim(), test_type: ttype, outcome,
+      file_name: sname.trim()
+    };
+    const ok = await save({...data, sessions:[...sessions,s]});
+    if (ok !== false) {
+      toast("Run saved");
+      setSecs(0); setStoppedSecs(0);
+      setPhase("timer"); setIssues(""); setSname(""); setTtype(""); setOutcome("Success");
+    }
+  };
+
+  const discardRun = () => {
+    setSecs(0); setStoppedSecs(0); setPhase("timer");
+    setRunning(false); setPaused(false);
+  };
+
+  if (phase === "review") return (
+    <div style={{maxWidth:600}}>
+      {/* Run summary */}
+      <div className="settings-block" style={{borderColor:"var(--ok)",background:"var(--bg)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>
+          <div style={{fontSize:32,fontWeight:700,letterSpacing:"-.03em",fontVariantNumeric:"tabular-nums",color:"var(--ok)"}}>
+            {tStr(stoppedSecs)}
+          </div>
+          <div>
+            <div style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>Run complete</div>
+            <div style={{fontSize:11,color:"var(--text3)"}}>{sideCmps.map(c=>c.name).join(", ")}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Review questions */}
+      <div className="settings-block">
+        <div className="settings-block-title">Run review</div>
+        <div style={{marginBottom:18}}>
+          <div style={{fontSize:13,fontWeight:500,color:"var(--text)",marginBottom:10}}>
+            Was the run successful?
+          </div>
+          <div className="btn-row">
+            {OUTCOMES.map(o=>(
+              <button key={o} className={`btn btn-sm ${outcome===o?"btn-p":"btn-s"}`}
+                onClick={()=>setOutcome(o)}>{o}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{marginBottom:18}}>
+          <div style={{fontSize:13,fontWeight:500,color:"var(--text)",marginBottom:10}}>
+            Were there any issues or observations?
+          </div>
+          <textarea value={issues} onChange={e=>setIssues(e.target.value)}
+            placeholder="Describe any problems, anomalies, or notes from this run…"
+            style={{width:"100%",background:"var(--bg)",border:"1px solid var(--border)",
+              borderRadius:"var(--r)",padding:"8px 10px",fontSize:13,color:"var(--text)",
+              fontFamily:"inherit",resize:"vertical",minHeight:90}}/>
+        </div>
+        <div className="fcols" style={{gridTemplateColumns:"1fr 1fr",marginBottom:14}}>
+          <div className="field"><label>Test type</label>
+            <select value={ttype} onChange={e=>setTtype(e.target.value)}>
+              {TEST_TYPES.map(t=><option key={t} value={t}>{t||"— select —"}</option>)}</select></div>
+          <div className="field"><label>Session name (optional)</label>
+            <input value={sname} onChange={e=>setSname(e.target.value)} placeholder="e.g. T01_endurance"/></div>
+        </div>
+        <div className="btn-row">
+          <button className="btn btn-p" onClick={saveRun}>Save run</button>
+          <button className="btn btn-d" onClick={discardRun}>Discard</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{maxWidth:700}}>
+      <p style={{fontSize:12,color:"var(--text2)",marginBottom:16,lineHeight:1.7}}>
+        Select the active setup, then start the timer when the run begins. After stopping,
+        you will be prompted to review the outcome before saving.
+      </p>
+      <SideSelector side={side} setSide={setSide} manSel={manSel} setManSel={setManSel}
+        sideCmps={sideCmps} components={components}
+        manMotor={manMotor} setManMotor={setManMotor}
+        manCtrl={manCtrl}   setManCtrl={setManCtrl}
+        manProp={manProp}   setManProp={setManProp}
+        manBat={manBat}     setManBat={setManBat}/>
+      <div className="settings-block">
+        <div className="settings-block-title">Timer</div>
+        <div className={`timer-big ${running&&!paused?"run":paused?"pause":""}`}>
+          {tStr(secs)}
+        </div>
+        <div style={{fontSize:11,color:"var(--text3)",marginBottom:16,minHeight:16}}>
+          {!running && secs===0 ? "Ready — select setup above, then press Start"
+          : running && !paused ? "Running…"
+          : paused ? "Paused"
+          : ""}
+        </div>
+        <div className="btn-row">
+          {!running
+            ? <button className="btn btn-p"
+                disabled={sideCmps.length===0}
+                onClick={()=>{setRunning(true);setPaused(false);}}>
+                Start
+              </button>
+            : <>
+                <button className="btn btn-s" onClick={()=>setPaused(p=>!p)}>
+                  {paused?"Resume":"Pause"}
+                </button>
+                <button className="btn btn-p" onClick={stopTimer}>Stop</button>
+                <button className="btn btn-d" onClick={discardRun}>Discard</button>
+              </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PAGE: LOG BOOK
+// ═══════════════════════════════════════════════════════════════════
+function PageLogBook({ data, save, toast }) {
+  const { sessions=[], components=[] } = data;
+  const [editId,  setEditId]  = useState(null);
+  const [eNotes,  setENotes]  = useState("");
+  const [eType,   setEType]   = useState("");
+  const [eOut,    setEOut]    = useState("Success");
+  const [delId,   setDelId]   = useState(null);
+  const [filter,  setFilter]  = useState("");
+
+  const sorted = [...sessions].sort((a,b)=>b.timestamp?.localeCompare(a.timestamp));
+  const rows = filter
+    ? sorted.filter(s=>[s.notes,s.test_type,s.outcome,...(s.components||[]).map(id=>components.find(c=>c.id===id)?.name||"")]
+        .some(v=>(v||"").toLowerCase().includes(filter.toLowerCase())))
+    : sorted;
+
+  const startEdit = s=>{ setEditId(s.id);setENotes(s.notes||"");setEType(s.test_type||"");setEOut(s.outcome||"Success"); };
+  const saveEdit  = async()=>{
+    await save({...data,sessions:sessions.map(s=>s.id===editId?{...s,notes:eNotes,test_type:eType,outcome:eOut}:s)});
+    toast("Session updated"); setEditId(null);
+  };
+  const del = async id=>{ await save({...data,sessions:sessions.filter(s=>s.id!==id)}); toast("Deleted"); setDelId(null); };
+
+  const exportCsv = ()=>{
+    const h=["Date","Components","Duration","Hours","Notes","Test type","Outcome"];
+    const body=sorted.map(s=>{
+      const cn=(s.components||[]).map(id=>components.find(c=>c.id===id)?.name||"").filter(Boolean).join("; ");
+      return [s.timestamp?.slice(0,10)||"",cn,fmtDur(s.hours||0),(s.hours||0).toFixed(4),s.notes||"",s.test_type||"",s.outcome||""];
+    });
+    const csv=[h,...body].map(r=>r.map(x=>`"${x}"`).join(",")).join("\n");
+    const a=document.createElement("a");
+    a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
+    a.download=`bench_log_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  };
+
+  const outBadge=o=>({Success:"b-ok","Hardware Failure":"b-crit","User Abort":"b-warn","Inconclusive":"b-warn"}[o]||"b-ok");
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:8,marginBottom:13,alignItems:"center"}}>
+        <input style={{flex:1,background:"var(--surface)",border:"1px solid var(--border)",
+          borderRadius:"var(--r)",padding:"7px 9px",fontSize:12,color:"var(--text)",fontFamily:"inherit"}}
+          placeholder="Filter by component, notes, type, outcome…" value={filter} onChange={e=>setFilter(e.target.value)}/>
+        <button className="btn btn-s btn-sm" onClick={exportCsv}>Export CSV</button>
+      </div>
+      <div className="card" style={{padding:0,overflow:"hidden"}}>
+        <table className="tbl">
+          <thead>
+            <tr><th>Date</th><th>Components</th><th>Duration</th><th>Notes</th><th>Type</th><th>Outcome</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {rows.length===0 && <tr><td colSpan={7}><div className="empty">No sessions</div></td></tr>}
+            {rows.map(s=>{
+              const cn=(s.components||[]).map(id=>components.find(c=>c.id===id)?.name||"").filter(Boolean).join(", ")||"—";
+              if(editId===s.id) return (
+                <tr key={s.id} style={{background:"var(--bg)"}}>
+                  <td>{s.timestamp?.slice(0,10)}</td>
+                  <td style={{fontSize:11,color:"var(--text2)"}}>{cn}</td>
+                  <td>{fmtDur(s.hours||0)}</td>
+                  <td><input value={eNotes} onChange={e=>setENotes(e.target.value)}
+                    style={{width:"100%",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:2,padding:"3px 6px",fontSize:12,color:"var(--text)",fontFamily:"inherit"}}/></td>
+                  <td><select value={eType} onChange={e=>setEType(e.target.value)}
+                    style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:2,padding:"3px 5px",fontSize:11,color:"var(--text)",fontFamily:"inherit"}}>
+                    {TEST_TYPES.map(t=><option key={t} value={t}>{t||"—"}</option>)}</select></td>
+                  <td><select value={eOut} onChange={e=>setEOut(e.target.value)}
+                    style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:2,padding:"3px 5px",fontSize:11,color:"var(--text)",fontFamily:"inherit"}}>
+                    {OUTCOMES.map(o=><option key={o} value={o}>{o}</option>)}</select></td>
+                  <td><div className="btn-row">
+                    <button className="btn btn-p btn-sm" onClick={saveEdit}>Save</button>
+                    <button className="btn btn-s btn-sm" onClick={()=>setEditId(null)}>Cancel</button>
+                  </div></td>
+                </tr>
+              );
+              return (
+                <tr key={s.id}>
+                  <td style={{whiteSpace:"nowrap"}}>{s.timestamp?.slice(0,10)||"—"}</td>
+                  <td style={{fontSize:11,color:"var(--text2)",maxWidth:200}}>{cn}</td>
+                  <td style={{whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums"}}>{fmtDur(s.hours||0)}</td>
+                  <td style={{fontSize:12,color:"var(--text2)"}}>{s.notes||"—"}</td>
+                  <td style={{fontSize:11}}>{s.test_type||"—"}</td>
+                  <td><span className={`badge ${outBadge(s.outcome)}`}>{s.outcome||"Success"}</span></td>
+                  <td><div className="btn-row">
+                    {delId===s.id
+                      ? <><button className="btn btn-d btn-sm" onClick={()=>del(s.id)}>Confirm</button>
+                          <button className="btn btn-s btn-sm" onClick={()=>setDelId(null)}>Cancel</button></>
+                      : <><button className="btn btn-s btn-sm" onClick={()=>startEdit(s)}>Edit</button>
+                          <button className="btn btn-d btn-sm" onClick={()=>setDelId(s.id)}>Delete</button></>}
+                  </div></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PAGE: COMPONENTS
+// ═══════════════════════════════════════════════════════════════════
+function PageComponents({ data, save, toast }) {
+  const { sessions=[], components=[] } = data;
+  const [nType,    setNType]   = useState("Motor");
+  const [nBrand,   setNBrand]  = useState("");
+  const [nSer,     setNSer]    = useState("");
+  const [nLim,     setNLim]    = useState(50);
+  const [delId,    setDelId]   = useState(null);
+  const [limVals,  setLimVals] = useState({});
+  const [renameId, setRenameId]= useState(null);
+  const [renameTxt,setRenameTxt]=useState("");
+
+  const add = async () => {
+    if (!nBrand.trim()) { toast("Please enter a brand/model"); return; }
+    const name = nSer.trim() ? `${nBrand.trim()}_${nSer.trim()}` : nBrand.trim();
+    if (components.find(c => c.name.toLowerCase() === name.toLowerCase())) {
+      toast(`${name} already exists`); return;
+    }
+    const c = { id:mkId(nType.toLowerCase()), name, type:nType, hours:0, sessions:0, limit:nLim||null };
+    await save({...data, components:[...components, c]});
+    toast(`Added ${nType}: ${name}`);
+    setNBrand(""); setNSer("");
+  };
+
+  const del = async id => {
+    await save({...data, components:components.filter(c=>c.id!==id)});
+    toast("Removed"); setDelId(null);
+  };
+
+  const saveLim = async id => {
+    const v = parseFloat(limVals[id]);
+    await save({...data, components:components.map(c=>c.id===id?{...c,limit:isNaN(v)?null:v}:c)});
+    toast("Limit saved");
+  };
+
+  const startRename = c => { setRenameId(c.id); setRenameTxt(c.name); };
+
+  const saveRename = async () => {
+    const newName = renameTxt.trim();
+    if (!newName) { toast("Name cannot be empty"); return; }
+    // Update component name AND update all sessions that reference this component
+    // (sessions store IDs not names, so no session update needed — just rename the component)
+    const newComps = components.map(c => c.id===renameId ? {...c, name:newName} : c);
+    await save({...data, components:newComps});
+    toast("Renamed"); setRenameId(null);
+  };
+
+  // Find duplicate brands (case-insensitive)
+  const brandGroups = {};
+  components.forEach(c => {
+    const b = brandOf(c.name).toLowerCase();
+    if (!brandGroups[b]) brandGroups[b] = [];
+    brandGroups[b].push(c);
+  });
+  const duplicateBrands = Object.entries(brandGroups).filter(([,cs]) => {
+    const variants = [...new Set(cs.map(c => brandOf(c.name)))];
+    return variants.length > 1;
+  });
+
+  return (
+    <div style={{maxWidth:900}}>
+
+      {/* Duplicate brand warning */}
+      {duplicateBrands.length > 0 && (
+        <div style={{background:"#fff8e1",border:"1px solid #f0d060",borderRadius:"var(--r)",
+          padding:"12px 16px",marginBottom:14,fontSize:12,color:"#7a5c00"}}>
+          <b>Inconsistent naming detected:</b> rename components to fix the chart grouping.
+          {duplicateBrands.map(([b, cs])=>(
+            <div key={b} style={{marginTop:4}}>
+              Variants of <b>{cs[0].name.split("_")[0]}</b>: {[...new Set(cs.map(c=>brandOf(c.name)))].join(" · ")}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add component */}
+      <div className="settings-block">
+        <div className="settings-block-title">Add a component</div>
+        <div className="fcols" style={{gridTemplateColumns:"1fr 1fr 1fr 1fr",marginBottom:11}}>
+          <div className="field"><label>Type</label>
+            <select value={nType} onChange={e=>setNType(e.target.value)}>
+              {["Motor","ESC","Prop","Battery"].map(t=><option key={t}>{t}</option>)}
+            </select></div>
+          <div className="field"><label>Brand / Model</label>
+            <input value={nBrand} onChange={e=>setNBrand(e.target.value)} placeholder="e.g. Elmo120A"/></div>
+          <div className="field"><label>Serial number</label>
+            <input value={nSer} onChange={e=>setNSer(e.target.value)} placeholder="e.g. GDR26125020"/></div>
+          <div className="field"><label>Max hours</label>
+            <input type="number" min="0" value={nLim} onChange={e=>setNLim(+e.target.value)}/></div>
+        </div>
+        <button className="btn btn-p" onClick={add}>Add component</button>
+      </div>
+
+      {/* Component list */}
+      {["Motor","ESC","Prop","Battery"].map(type => {
+        const items = components.filter(c=>c.type===type);
+        if (!items.length) return null;
+        return (
+          <div key={type} className="settings-block">
+            <div className="settings-block-title">{type}s</div>
+            {items.map(c => {
+              const h   = compHours(c.id, sessions);
+              const st  = compStatus(h, c.limit);
+              const pct = c.limit ? Math.min(h/c.limit, 1) : 0;
+              const isRenaming = renameId === c.id;
+              return (
+                <div key={c.id} style={{paddingBottom:12,marginBottom:12,borderBottom:"1px solid var(--border)"}}>
+                  {isRenaming ? (
+                    <div className="btn-row" style={{marginBottom:8}}>
+                      <input value={renameTxt} onChange={e=>setRenameTxt(e.target.value)}
+                        onKeyDown={e=>e.key==="Enter"&&saveRename()}
+                        autoFocus
+                        style={{flex:1,background:"var(--bg)",border:"1px solid var(--text)",
+                          borderRadius:"var(--r)",padding:"5px 9px",fontSize:13,
+                          color:"var(--text)",fontFamily:"inherit"}}/>
+                      <button className="btn btn-p btn-sm" onClick={saveRename}>Save name</button>
+                      <button className="btn btn-s btn-sm" onClick={()=>setRenameId(null)}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontWeight:500,fontSize:13}}>{c.name}</span>
+                        <span className={`badge b-${st}`}>{st==="ok"?"OK":st==="warn"?"Due soon":"Maintenance"}</span>
+                      </div>
+                      <span style={{fontSize:11,color:"var(--text3)"}}>{fmtDur(h)}{c.limit?` / ${fmtDur(c.limit)}`:""}</span>
+                    </div>
+                  )}
+                  {c.limit && <div className="hbar"><div className={`hfill ${st}`} style={{width:`${pct*100}%`}}/></div>}
+                  <div className="btn-row" style={{marginTop:7}}>
+                    <input type="number" min="0" placeholder="Hour limit"
+                      defaultValue={c.limit||""}
+                      onChange={e=>setLimVals(p=>({...p,[c.id]:e.target.value}))}
+                      style={{width:100,background:"var(--bg)",border:"1px solid var(--border)",
+                        borderRadius:"var(--r)",padding:"4px 7px",fontSize:12,
+                        color:"var(--text)",fontFamily:"inherit"}}/>
+                    <button className="btn btn-s btn-sm" onClick={()=>saveLim(c.id)}>Save limit</button>
+                    <button className="btn btn-s btn-sm" onClick={()=>startRename(c)}>Rename</button>
+                    {delId===c.id
+                      ? <><button className="btn btn-d btn-sm" onClick={()=>del(c.id)}>Confirm</button>
+                          <button className="btn btn-s btn-sm" onClick={()=>setDelId(null)}>Cancel</button></>
+                      : <button className="btn btn-d btn-sm" onClick={()=>setDelId(c.id)}>Remove</button>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PAGE: RIG CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════
+function PageRigConfig({ data, save, toast }) {
+  const cmps=data.components||[];
+  const [active, setActive]=useState(data.active_side||"Side A");
+  const [cfgA,   setCfgA  ]=useState(data.rig_side_a||{});
+  const [cfgB,   setCfgB  ]=useState(data.rig_side_b||{});
+  const [e2A,    setE2A   ]=useState(!!cfgA.ESC2);
+  const [e2B,    setE2B   ]=useState(!!cfgB.ESC2);
+  const [p2A,    setP2A   ]=useState(!!cfgA.Prop2);
+  const [p2B,    setP2B   ]=useState(!!cfgB.Prop2);
+
+  const opts = type=>["", ...cmps.filter(c=>c.type===type).map(c=>c.name)];
+  const ROLES=["","Master","Slave","ESC"];
+
+  const saveSide=async(side,cfg)=>{
+    const key=side==="A"?"rig_side_a":"rig_side_b";
+    await save({...data,[key]:cfg,active_side:active});
+    toast(`Side ${side} saved`);
+  };
+
+  const SideForm=({lbl,cfg,set,e2,setE2,p2,setP2})=>(
+    <div className="settings-block">
+      <div className="settings-block-title">Side {lbl}</div>
+      <div className="frow">
+        <div className="field"><label>Motor</label>
+          <select value={cfg.Motor||""} onChange={e=>set({...cfg,Motor:e.target.value})}>
+            {opts("Motor").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}</select></div>
+        <div className="fcols" style={{gridTemplateColumns:"1fr 1fr"}}>
+          <div className="field"><label>ESC</label>
+            <select value={cfg.ESC||""} onChange={e=>set({...cfg,ESC:e.target.value})}>
+              {opts("ESC").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}</select></div>
+          <div className="field"><label>Role</label>
+            <select value={cfg.ESC_role||""} onChange={e=>set({...cfg,ESC_role:e.target.value})}>
+              {ROLES.map(r=><option key={r} value={r}>{r||"—"}</option>)}</select></div>
+        </div>
+        {e2 ? (
+          <div className="fcols" style={{gridTemplateColumns:"1fr 1fr auto",alignItems:"flex-end",gap:8}}>
+            <div className="field"><label>ESC 2</label>
+              <select value={cfg.ESC2||""} onChange={e=>set({...cfg,ESC2:e.target.value})}>
+                {opts("ESC").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}</select></div>
+            <div className="field"><label>Role</label>
+              <select value={cfg.ESC2_role||""} onChange={e=>set({...cfg,ESC2_role:e.target.value})}>
+                {ROLES.map(r=><option key={r} value={r}>{r||"—"}</option>)}</select></div>
+            <button className="btn btn-s btn-sm" style={{marginBottom:1}} onClick={()=>{setE2(false);set({...cfg,ESC2:"",ESC2_role:""});}}>Remove</button>
+          </div>
+        ) : <button className="btn btn-s btn-sm" style={{width:"fit-content"}} onClick={()=>setE2(true)}>Add second ESC</button>}
+        <div className="field"><label>Prop</label>
+          <select value={cfg.Prop||""} onChange={e=>set({...cfg,Prop:e.target.value})}>
+            {opts("Prop").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}</select></div>
+        {p2 ? (
+          <div className="fcols" style={{gridTemplateColumns:"1fr auto",alignItems:"flex-end",gap:8}}>
+            <div className="field"><label>Prop 2</label>
+              <select value={cfg.Prop2||""} onChange={e=>set({...cfg,Prop2:e.target.value})}>
+                {opts("Prop").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}</select></div>
+            <button className="btn btn-s btn-sm" style={{marginBottom:1}} onClick={()=>{setP2(false);set({...cfg,Prop2:""});}}>Remove</button>
+          </div>
+        ) : <button className="btn btn-s btn-sm" style={{width:"fit-content"}} onClick={()=>setP2(true)}>Add second prop</button>}
+        <div className="field"><label>Battery</label>
+          <select value={cfg.Battery||""} onChange={e=>set({...cfg,Battery:e.target.value})}>
+            {opts("Battery").map(o=><option key={o} value={o}>{o||"— none —"}</option>)}</select></div>
+        {["Test objective","Operator","Notes"].map(f=>(
+          <div key={f} className="field"><label>{f}</label>
+            <input value={cfg[f]||""} onChange={e=>set({...cfg,[f]:e.target.value})}/></div>
+        ))}
+        <button className="btn btn-p" style={{width:"fit-content"}} onClick={()=>saveSide(lbl,cfg)}>Save Side {lbl}</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{maxWidth:860}}>
+      <div className="settings-block">
+        <div className="settings-block-title">Active setup</div>
+        <div className="btn-row">
+          {["Side A","Side B","Both"].map(s=>(
+            <button key={s} className={`btn btn-sm ${active===s?"btn-p":"btn-s"}`}
+              onClick={async()=>{setActive(s);await save({...data,active_side:s});toast(`Active: ${s}`);}}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        <SideForm lbl="A" cfg={cfgA} set={setCfgA} e2={e2A} setE2={setE2A} p2={p2A} setP2={setP2A}/>
+        <SideForm lbl="B" cfg={cfgB} set={setCfgB} e2={e2B} setE2={setE2B} p2={p2B} setP2={setP2B}/>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PAGE: LOG EVENTS
+// ═══════════════════════════════════════════════════════════════════
+function PageLogEvents({ data, save, toast }) {
+  const evts=data.events||[];
+  const now=new Date();
+  const [sev,  setSev ]= useState("info");
+  const [txt,  setTxt ]= useState("");
+  const [date, setDate]= useState(now.toISOString().slice(0,10));
+  const [time, setTime]= useState(now.toTimeString().slice(0,5));
+  const [delId,setDelId]=useState(null);
+
+  const log=async()=>{
+    if(!txt.trim()){toast("Please enter a description");return;}
+    const ev={id:mkId("ev"),severity:sev,text:txt.trim(),timestamp:`${date}T${time}:00`};
+    await save({...data,events:[...evts,ev]});
+    toast("Event logged"); setTxt("");
+  };
+  const del=async id=>{ await save({...data,events:evts.filter(e=>e.id!==id)}); toast("Deleted"); setDelId(null); };
+
+  const sorted=[...evts].sort((a,b)=>b.timestamp?.localeCompare(a.timestamp));
+
+  return (
+    <div style={{display:"grid",gridTemplateColumns:"320px 1fr",gap:18,maxWidth:960}}>
+      <div className="settings-block">
+        <div className="settings-block-title">Log an event</div>
+        <div className="frow">
+          <div className="field"><label>Severity</label>
+            <select value={sev} onChange={e=>setSev(e.target.value)}>
+              <option value="info">Info</option>
+              <option value="warning">Warning</option>
+              <option value="critical">Critical</option>
+            </select></div>
+          <div className="fcols" style={{gridTemplateColumns:"1fr 1fr"}}>
+            <div className="field"><label>Date</label><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+            <div className="field"><label>Time</label><input type="time" value={time} onChange={e=>setTime(e.target.value)}/></div>
+          </div>
+          <div className="field"><label>Description</label>
+            <textarea value={txt} onChange={e=>setTxt(e.target.value)} placeholder="e.g. Motor overheated at 120°C"/></div>
+          <button className="btn btn-p" style={{width:"fit-content"}} onClick={log}>Log event</button>
+        </div>
+      </div>
+      <div className="card">
+        <div className="card-title">Recent events</div>
+        {sorted.length===0 ? <div className="empty">No events logged yet</div>
+        : sorted.map(ev=>(
+          <div key={ev.id} className={`ev ${ev.severity||"info"}`}
+            style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{flex:1}}>
+              <div className="ev-meta">
+                <span className={`ev-sev ${ev.severity||"info"}`}>{ev.severity}</span>
+                {(ev.timestamp||"").slice(0,16).replace("T"," ")}
+              </div>
+              {ev.text}
+            </div>
+            <div style={{marginLeft:8,flexShrink:0}}>
+              {delId===ev.id
+                ? <div className="btn-row">
+                    <button className="btn btn-d btn-sm" onClick={()=>del(ev.id)}>Confirm</button>
+                    <button className="btn btn-s btn-sm" onClick={()=>setDelId(null)}>Cancel</button>
+                  </div>
+                : <button className="btn btn-s btn-sm" onClick={()=>setDelId(ev.id)}>Delete</button>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PAGE: SETTINGS
+// ═══════════════════════════════════════════════════════════════════
+function PageSettings({ data, save, toast, cfg, saveCfg, sync, onRefresh }) {
+  const [proxyUrl, setProxyUrl]=useState(cfg.proxyUrl||"");
+
+  const saveCfgLocal=()=>{
+    saveCfg({...cfg,proxyUrl});
+    toast("Settings saved");
+    // Trigger a fresh load with new proxy URL after short delay
+    setTimeout(() => load(true), 300);
+  };
+
+  const exportJson=()=>{
+    const a=document.createElement("a");
+    a.href="data:application/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(data,null,2));
+    a.download=`bench_data_${new Date().toISOString().slice(0,10)}.json`; a.click();
+  };
+
+  return (
+    <div style={{maxWidth:680}}>
+      <div className="settings-block">
+        <div className="settings-block-title">Cloud sync</div>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+          <div style={{width:7,height:7,borderRadius:"50%",background:sync==="ok"?"var(--ok)":sync==="err"?"var(--danger)":"var(--warn)"}}/>
+          <span style={{fontSize:12,color:"var(--text2)"}}>
+            {sync==="ok"?"Connected — reading from Google Sheets":sync==="err"?"Read error — check network":"Connecting…"}
+          </span>
+          <button className="btn btn-s btn-sm" onClick={onRefresh}>Test connection</button>
+        </div>
+        <div style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:"var(--r)",padding:"10px 12px",marginBottom:14}}>
+          <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".1em",color:"var(--text3)",marginBottom:3}}>Sheet ID</div>
+          <div style={{fontFamily:"monospace",fontSize:11,color:"var(--text2)"}}>{SHEET_ID}</div>
+        </div>
+        <div className="field" style={{marginBottom:12}}>
+          <label>Write proxy URL (Apps Script Web App)</label>
+          <input value={proxyUrl} onChange={e=>setProxyUrl(e.target.value)} placeholder="https://script.google.com/macros/s/…/exec"/>
+        </div>
+        <button className="btn btn-p" onClick={saveCfgLocal}>Save</button>
+      </div>
+
+      <div className="settings-block">
+        <div className="settings-block-title">Write access — Apps Script setup</div>
+        <p style={{fontSize:12,color:"var(--text2)",marginBottom:10,lineHeight:1.6}}>
+          To enable writing data from the browser, deploy a Google Apps Script as a Web App:
+        </p>
+        <ol style={{fontSize:12,color:"var(--text2)",paddingLeft:18,lineHeight:2,marginBottom:10}}>
+          <li>Open your Google Sheet → Extensions → Apps Script</li>
+          <li>Replace all code with the snippet below and click Save</li>
+          <li>Click Deploy → New deployment → Web app</li>
+          <li>Execute as: <b>Me</b> — Who has access: <b>Anyone</b> → Deploy</li>
+          <li>Copy the Web App URL and paste it above</li>
+        </ol>
+        <pre>{`// ── Set this to match OP_PASS in your index.html ──────────────────
+var OPERATOR_PIN = "air2024";
+
+// ── GET: public read — no PIN required ────────────────────────────
+// Used by the React app when opening from a local file (file://)
+// to bypass the CORS restriction on the gviz CSV endpoint.
+function doGet(e) {
+  var params = e.parameter;
+  if (params.action === "read") {
+    var ss    = SpreadsheetApp.openById(params.sheetId);
+    var sheet = ss.getSheetByName("bench_data");
+    if (!sheet) return ContentService
+      .createTextOutput("{}")
+      .setMimeType(ContentService.MimeType.TEXT);
+    var val = sheet.getRange("A1").getValue();
+    return ContentService
+      .createTextOutput(val || "{}")
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+  return ContentService
+    .createTextOutput("{}")
+    .setMimeType(ContentService.MimeType.TEXT);
+}
+
+// ── POST: protected write — PIN required ──────────────────────────
+function doPost(e) {
+  var body = JSON.parse(e.postData.contents);
+  if (body.pin !== OPERATOR_PIN) {
+    return ContentService
+      .createTextOutput("forbidden")
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+  var ss    = SpreadsheetApp.openById(body.sheetId);
+  var sheet = ss.getSheetByName("bench_data")
+              || ss.insertSheet("bench_data");
+  sheet.getRange("A1").setValue(body.data);
+  return ContentService
+    .createTextOutput("ok")
+    .setMimeType(ContentService.MimeType.TEXT);
+}`}</pre>
+      </div>
+
+      <div className="settings-block">
+        <div className="settings-block-title">Asana integration</div>
+        <div className="fcols" style={{gridTemplateColumns:"1fr 1fr",marginBottom:11}}>
+          <div className="field"><label>Personal Access Token</label>
+            <input type="password" defaultValue={data.asana?.token||""} id="asana_tok"/></div>
+          <div className="field"><label>Project GID</label>
+            <input type="text" defaultValue={data.asana?.project_gid||""} id="asana_gid"/></div>
+        </div>
+        <button className="btn btn-p" onClick={async()=>{
+          await save({...data,asana:{token:document.getElementById("asana_tok").value,project_gid:document.getElementById("asana_gid").value}});
+          toast("Asana settings saved");
+        }}>Save Asana settings</button>
+      </div>
+
+      <div className="settings-block">
+        <div className="settings-block-title">Data export</div>
+        <button className="btn btn-s" onClick={exportJson}>Download bench_data.json</button>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════════
+ReactDOM.render(<App/>, document.getElementById("root"));
+</script>
+</body>
+</html>
