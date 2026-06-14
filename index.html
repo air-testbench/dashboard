@@ -510,16 +510,30 @@ function App() {
   }, [showToast]);
 
   useEffect(() => {
-    // ALWAYS start from localStorage — it's the source of truth
+    // 1. Show cached data instantly so UI is never blank
     try {
       const s = localStorage.getItem(LOCAL_KEY);
-      const localData = s ? ensureKeys(JSON.parse(s)) : ensureKeys({});
-      setData(localData);
+      if (s) setData(ensureKeys(JSON.parse(s)));
+      else    setData(ensureKeys({}));
     } catch { setData(ensureKeys({})); }
-    // Show sync status — don't auto-load from Sheets on startup
-    // (prevents Sheets from overwriting local unsaved changes)
-    const cfg0 = (() => { try { return JSON.parse(localStorage.getItem("tbCfg")||"{}"); } catch { return {}; } })();
-    setSync("ok"); // proxy always available via DEFAULT_PROXY
+    // 2. Always fetch fresh data from Sheets on startup (no toast on auto-load)
+    (async () => {
+      try {
+        const freshCfg = (() => {
+          try { return JSON.parse(localStorage.getItem("tbCfg")||"{}"); } catch { return {}; }
+        })();
+        const proxyUrl = freshCfg.proxyUrl || DEFAULT_PROXY;
+        setSync("busy");
+        const d = await SheetsAPI.read(proxyUrl);
+        if (d) {
+          localStorage.setItem(LOCAL_KEY, JSON.stringify(d));
+          setData(d);
+          setSync("ok");
+        } else {
+          setSync("err");
+        }
+      } catch(e) { setSync("err"); }
+    })();
   }, []);
 
   // ── Save helper ───────────────────────────────────────────────────
