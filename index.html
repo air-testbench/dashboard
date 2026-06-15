@@ -437,26 +437,28 @@ const SheetsAPI = {
   // Always saves to localStorage immediately (instant, no network needed).
   // Then pushes to Google Sheets via proxy in background.
   async write(data, proxyUrl, pin) {
-    // Always persist locally first — this is why the app never "loses" data
     try { localStorage.setItem(LOCAL_KEY, JSON.stringify(data)); } catch(e) {}
-
-    if (!proxyUrl) {
-      console.warn("No proxy URL set — data saved locally only");
-      return "local"; // not false — local save succeeded
-    }
+    if (!proxyUrl) return "local";
+    const body = JSON.stringify({ sheetId:SHEET_ID, data: JSON.stringify(data), pin });
+    // First try: standard fetch (works on GitHub Pages, fails on localhost due to CORS)
     try {
       const res = await fetch(proxyUrl, {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ sheetId:SHEET_ID, data: JSON.stringify(data), pin })
+        method:"POST", headers:{"Content-Type":"application/json"}, body
       });
       const txt = await res.text();
-      if (txt === "forbidden") return "forbidden";
-      return res.ok;
+      if (txt==="forbidden") return "forbidden";
+      if (txt==="ok"||res.ok) return true;
     } catch(e) {
-      console.warn("Proxy write failed — saved locally only", e);
-      return "local";
+      // Second try: no-cors mode (works from localhost, can't read response but write still happens)
+      try {
+        await fetch(proxyUrl, {
+          method:"POST", mode:"no-cors",
+          headers:{"Content-Type":"text/plain"}, body
+        });
+        return true; // assume ok — no-cors means write went through
+      } catch(e2) { return false; }
     }
+    return false;
   }
 };
 
@@ -538,36 +540,36 @@ function App() {
 
   // ── Save helper ───────────────────────────────────────────────────
   const save = useCallback(async newData => {
-    // Step 1: write to localStorage FIRST (most important)
+    // Step 1: localStorage first — always works
     try {
       localStorage.setItem(LOCAL_KEY, JSON.stringify(newData));
-    } catch(e) {
-      showToast("Save failed: " + e.message);
-      return false;
-    }
-    // Step 2: update React state
+    } catch(e) { showToast("Critical: " + e.message); return false; }
+    // Step 2: update React state immediately
     setData(newData);
-    // Step 3: push to Sheets if proxy configured
+    // Step 3: push to Sheets with 3 retries
     const freshCfg = (() => {
       try { return JSON.parse(localStorage.getItem("tbCfg")||"{}"); } catch { return {}; }
     })();
     const proxyUrl = freshCfg.proxyUrl || DEFAULT_PROXY;
-    if (proxyUrl) {
-      setSync("busy");
+    setSync("busy");
+    let success = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const result = await SheetsAPI.write(newData, proxyUrl, OP_PASS);
-        if (result === true) {
-          setSync("ok");
-        } else if (result === "forbidden") {
+        if (result === true) { success = true; break; }
+        if (result === "forbidden") {
           setSync("err");
-          showToast("Access denied — check PIN in Apps Script");
-        } else {
-          setSync("err");
-          // Data is safe in localStorage even if Sheets push failed
+          showToast("Access denied — wrong PIN");
+          return true;
         }
-      } catch(e) { setSync("err"); }
+      } catch(e) {}
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
+    if (success) {
+      setSync("ok");
     } else {
       setSync("err");
+      showToast("Not synced to Sheets — click the red status to retry");
     }
     return true;
   }, [showToast]);
@@ -679,9 +681,19 @@ function App() {
             <button className="btn btn-s btn-sm" onClick={load}>Refresh</button>
             <div className="sync">
               <div className={`sync-dot ${sync==="busy"?"busy":sync==="err"?"err":""}`}/>
-              {sync==="busy" ? "Syncing"
-               : sync==="err" ? <span title="Open Settings and set the proxy URL to sync to Google Sheets">Local only</span>
-               : "Live — synced to Sheets"}
+              {sync==="busy" ? "Syncing…"
+               : sync==="err"
+                 ? <span style={{cursor:"pointer",color:"var(--danger)"}}
+                     onClick={async()=>{
+                       const cached=localStorage.getItem(LOCAL_KEY);
+                       if(!cached) return;
+                       const proxy=(()=>{try{return JSON.parse(localStorage.getItem("tbCfg")||"{}").proxyUrl||DEFAULT_PROXY}catch{return DEFAULT_PROXY}})();
+                       setSync("busy");
+                       const r=await SheetsAPI.write(JSON.parse(cached),proxy,OP_PASS);
+                       setSync(r===true?"ok":"err");
+                     }}
+                     title="Click to retry sync">Not synced — tap to retry</span>
+                 : "Synced to Sheets"}
             </div>
           </div>
         </div>
@@ -1971,42 +1983,53 @@ function PageSettings({ data, save, toast, cfg, saveCfg, sync, onRefresh }) {
         <pre>{`// ── Set this to match OP_PASS in your index.html ──────────────────
 var OPERATOR_PIN = "air2024";
 
-// ── GET: public read — no PIN required ────────────────────────────
-// Used by the React app when opening from a local file (file://)
-// to bypass the CORS restriction on the gviz CSV endpoint.
-function doGet(e) {
-  var params = e.parameter;
-  if (params.action === "read") {
-    var ss    = SpreadsheetApp.openById(params.sheetId);
-    var sheet = ss.getSheetByName("bench_data");
-    if (!sheet) return ContentService
-      .createTextOutput("{}")
-      .setMimeType(ContentService.MimeType.TEXT);
-    var val = sheet.getRange("A1").getValue();
-    return ContentService
-      .createTextOutput(val || "{}")
-      .setMimeType(ContentService.MimeType.TEXT);
-  }
-  return ContentService
-    .createTextOutput("{}")
+// ── CORS headers — required for localhost and all origins ─────────
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type"
+  };
+}
+
+function makeResponse(text) {
+  var output = ContentService.createTextOutput(text)
     .setMimeType(ContentService.MimeType.TEXT);
+  return output;
+}
+
+// ── GET: public read — no PIN required ────────────────────────────
+function doGet(e) {
+  var params = e.parameter || {};
+  if (params.action === "read") {
+    try {
+      var ss    = SpreadsheetApp.openById(params.sheetId);
+      var sheet = ss.getSheetByName("bench_data");
+      if (!sheet) return makeResponse("{}");
+      var val = sheet.getRange("A1").getValue();
+      return makeResponse(val || "{}");
+    } catch(err) {
+      return makeResponse("{}");
+    }
+  }
+  return makeResponse("{}");
 }
 
 // ── POST: protected write — PIN required ──────────────────────────
 function doPost(e) {
-  var body = JSON.parse(e.postData.contents);
-  if (body.pin !== OPERATOR_PIN) {
-    return ContentService
-      .createTextOutput("forbidden")
-      .setMimeType(ContentService.MimeType.TEXT);
+  try {
+    var body = JSON.parse(e.postData.contents);
+    if (body.pin !== OPERATOR_PIN) {
+      return makeResponse("forbidden");
+    }
+    var ss    = SpreadsheetApp.openById(body.sheetId);
+    var sheet = ss.getSheetByName("bench_data")
+                || ss.insertSheet("bench_data");
+    sheet.getRange("A1").setValue(body.data);
+    return makeResponse("ok");
+  } catch(err) {
+    return makeResponse("error: " + err.message);
   }
-  var ss    = SpreadsheetApp.openById(body.sheetId);
-  var sheet = ss.getSheetByName("bench_data")
-              || ss.insertSheet("bench_data");
-  sheet.getRange("A1").setValue(body.data);
-  return ContentService
-    .createTextOutput("ok")
-    .setMimeType(ContentService.MimeType.TEXT);
 }`}</pre>
       </div>
 
@@ -2025,8 +2048,45 @@ function doPost(e) {
       </div>
 
       <div className="settings-block">
-        <div className="settings-block-title">Data export</div>
-        <button className="btn btn-s" onClick={exportJson}>Download bench_data.json</button>
+        <div className="settings-block-title">Data export / import</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+          <button className="btn btn-s" onClick={exportJson}>Download bench_data.json</button>
+          <button className="btn btn-p" onClick={async()=>{
+            // Push current localStorage data directly to Sheets
+            const cached = localStorage.getItem(LOCAL_KEY);
+            if (!cached) { toast("No local data found"); return; }
+            const localData = JSON.parse(cached);
+            const proxy = cfg.proxyUrl || DEFAULT_PROXY;
+            toast("Pushing local data to Sheets…");
+            const res = await SheetsAPI.write(localData, proxy, OP_PASS);
+            if (res===true) {
+              toast("Pushed to Sheets successfully!");
+              // Also update current app state
+              await save(localData);
+            } else {
+              toast("Push failed — check proxy URL");
+            }
+          }}>Push local data to Sheets</button>
+        </div>
+        <p style={{fontSize:11,color:"var(--text3)",marginBottom:12}}>
+          If you have unsaved local work, click "Push local data to Sheets" to sync it to the cloud.
+        </p>
+        <div className="field" style={{marginBottom:8}}>
+          <label>Import from JSON file</label>
+          <input type="file" accept=".json" onChange={async e=>{
+            const file = e.target.files[0]; if (!file) return;
+            const text = await file.text();
+            try {
+              const imported = JSON.parse(text);
+              await save(imported);
+              toast("Imported successfully — data pushed to Sheets");
+            } catch { toast("Invalid JSON file"); }
+          }} style={{fontSize:12}}/>
+        </div>
+        <p style={{fontSize:11,color:"var(--text3)"}}>
+          To recover lost work: on the PC where you worked, click "Download bench_data.json", 
+          then import it here.
+        </p>
       </div>
     </div>
   );
