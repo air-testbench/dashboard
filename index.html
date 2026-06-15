@@ -178,23 +178,80 @@ input,select,textarea{font-family:inherit}
 pre{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:11px;font-size:11px;overflow-x:auto;white-space:pre-wrap;line-height:1.6}
 ::-webkit-scrollbar{width:3px}
 ::-webkit-scrollbar-thumb{background:var(--border)}
-@media(max-width:860px){
-  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+/* ── TABLET ──────────────────────────────────────────────────────── */
+@media(max-width:900px){
+  .kpi-grid{grid-template-columns:repeat(3,1fr)}
+  .chart-grid-3{grid-template-columns:1fr 1fr}
+}
+@media(max-width:700px){
+  .kpi-grid{grid-template-columns:1fr 1fr}
   .chart-grid-2,.chart-grid-3,.rig-sides{grid-template-columns:1fr}
 }
-@media(max-width:640px){
-  :root{--sidebar:0px}
-  .sidebar{transform:translateX(-220px);transition:transform .2s}
-  .sidebar.open{transform:translateX(0);width:220px;z-index:300;box-shadow:4px 0 20px rgba(0,0,0,.15)}
-  .main{margin-left:0}
-  .topbar{padding:0 12px}
-  .page{padding:16px 12px}
-  .kpi-grid{grid-template-columns:1fr 1fr}
+/* ── MOBILE ──────────────────────────────────────────────────────── */
+@media(max-width:600px){
+  /* Sidebar hidden by default, slides in as overlay */
+  .sidebar{
+    transform:translateX(-240px);
+    transition:transform .25s ease;
+    width:240px;
+    z-index:400;
+    box-shadow:none;
+  }
+  .sidebar.open{
+    transform:translateX(0);
+    box-shadow:4px 0 24px rgba(0,0,0,.18);
+  }
+  /* Overlay behind open sidebar */
+  .sidebar-overlay{
+    display:none;
+    position:fixed;inset:0;
+    background:rgba(0,0,0,.35);
+    z-index:399;
+  }
+  .sidebar-overlay.visible{display:block}
+  .main{margin-left:0 !important}
+  .topbar{padding:0 12px;height:52px}
+  .page{padding:14px 12px}
+  /* KPIs: 2 per row */
+  .kpi-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .kpi{padding:12px}
+  .kpi-v{font-size:17px}
+  /* All grids stack */
+  .chart-grid-2,.chart-grid-3,.rig-sides{grid-template-columns:1fr}
+  /* Cards */
+  .card{padding:14px}
+  /* Forms: stack to single column */
+  .fcols{grid-template-columns:1fr !important}
+  .frow{gap:8px}
+  /* Buttons: larger touch targets */
+  .btn{padding:10px 16px;font-size:13px}
+  .btn-sm{padding:8px 12px;font-size:12px}
+  /* Inputs: larger for touch */
+  .field input,.field select,.field textarea{
+    padding:10px;font-size:14px;
+  }
+  /* Timer: smaller on phone */
+  .timer-big{font-size:38px}
+  /* Tables: allow horizontal scroll */
+  .card{overflow-x:auto}
+  /* Settings blocks */
+  .settings-block{padding:14px}
+  /* Hamburger */
   .mob-menu{display:flex !important}
+  /* Component table 4-col → 2-col */
+  .comp-table-grid{grid-template-columns:1fr 1fr !important}
 }
-.mob-menu{display:none;align-items:center;justify-content:center;
-  width:32px;height:32px;background:none;border:none;cursor:pointer;
-  color:var(--text);font-size:20px}
+.mob-menu{
+  display:none;
+  align-items:center;justify-content:center;
+  width:40px;height:40px;
+  background:none;border:none;cursor:pointer;
+  color:var(--text);font-size:22px;
+  border-radius:var(--r);
+  flex-shrink:0;
+}
+.mob-menu:hover{background:var(--bg)}
+.sidebar-overlay{display:none}
 </style>
 </head>
 <body>
@@ -468,6 +525,7 @@ const SheetsAPI = {
 function App() {
   const [theme,    setTheme]   = useState(() => localStorage.getItem("tbTheme")||"light");
   const [page,     setPage]    = useState("Overview");
+  const [mobOpen,  setMobOpen] = useState(false);
   const [data,     setData]    = useState(null);
   const [sync,     setSync]    = useState("busy");
   const [toast,    setToast]   = useState(null);
@@ -618,7 +676,8 @@ function App() {
   return (
     <>
       {/* ── Sidebar ─────────────────────────────────────────────── */}
-      <div className="sidebar">
+      {mobOpen && <div className="sidebar-overlay visible" onClick={()=>setMobOpen(false)}/>}
+      <div className={`sidebar ${mobOpen?"open":""}`}>
         <div className="sb-logo">
           <div className="mark">air</div>
           <div className="sub">Motor Test Bench</div>
@@ -627,8 +686,7 @@ function App() {
           {/* Public pages — always visible */}
           {PUB_PAGES.map(p =>
             <a key={p} className={page===p?"active":""} onClick={()=>{
-              setPage(p);
-              document.querySelector(".sidebar")?.classList.remove("open");
+              setPage(p); setMobOpen(false);
             }}>{p}</a>
           )}
           <div className="sb-sep"/>
@@ -671,10 +729,9 @@ function App() {
       <div className="main">
         <div className="topbar">
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button className="mob-menu" onClick={()=>{
-              const sb=document.querySelector(".sidebar");
-              if(sb) sb.classList.toggle("open");
-            }} aria-label="Menu">&#9776;</button>
+            <button className="mob-menu" onClick={()=>setMobOpen(o=>!o)} aria-label="Menu">
+            {mobOpen ? "✕" : "☰"}
+          </button>
             <div className="topbar-title">{page}</div>
           </div>
           <div className="topbar-r">
@@ -1137,7 +1194,7 @@ function PageDashboard({ data }) {
       {/* ── Section 4: Component hours ──────────────────────────── */}
       <div className="card">
         <div className="card-title" style={{marginBottom:16}}>Component hours — individual</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:24}}>
+        <div className="comp-table-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:24}}>
           <CompTable title="Motors"    rows={compRows("Motor")}/>
           <CompTable title="ESCs"      rows={compRows("ESC")}/>
           <CompTable title="Props"     rows={compRows("Prop")}/>
